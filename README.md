@@ -31,31 +31,87 @@ uv pip install -e ".[dev]"
 pip install -e ".[dev]"
 ```
 
-## Quick Start
+## Authentication
 
-### 1. Configure Databricks Connection
+The tool supports multiple authentication methods for both **AWS** and **Azure** Databricks:
 
-Set environment variables:
+### Option 1: OAuth (Interactive - Default)
+
+Uses the Databricks SDK credential chain (Azure CLI, Databricks CLI, environment variables):
 
 ```bash
-export DATABRICKS_HOST="https://your-workspace.cloud.databricks.com"
-export DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/your-warehouse-id"
+# First, authenticate with Databricks CLI
+databricks auth login --host https://your-workspace.databricks.com
 
-# For OAuth (recommended) - uses default credential chain
-# For token auth (fallback):
-export DATABRICKS_TOKEN="your-personal-access-token"
+# Then run the tool
+odcs-sync from-file contracts/ \
+  --host "https://your-workspace.databricks.com" \
+  --http-path "/sql/1.0/warehouses/xxx" \
+  --oauth
 ```
 
-Or create a config file at `~/.odcs_sync.yaml`:
+### Option 2: Service Principal / OAuth M2M (Recommended for CI/CD)
+
+Works on both AWS and Azure Databricks:
+
+```bash
+odcs-sync from-file contracts/ \
+  --host "https://your-workspace.databricks.com" \
+  --http-path "/sql/1.0/warehouses/xxx" \
+  --client-id "your-client-id" \
+  --client-secret "your-client-secret"
+```
+
+Or via environment variables:
+
+```bash
+export DATABRICKS_HOST="https://your-workspace.databricks.com"
+export DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/xxx"
+export DATABRICKS_CLIENT_ID="your-client-id"
+export DATABRICKS_CLIENT_SECRET="your-client-secret"
+
+odcs-sync from-file contracts/
+```
+
+### Option 3: Personal Access Token
+
+```bash
+odcs-sync from-file contracts/ \
+  --host "https://your-workspace.databricks.com" \
+  --http-path "/sql/1.0/warehouses/xxx" \
+  --no-oauth \
+  --token "your-personal-access-token"
+```
+
+Or via environment variable:
+
+```bash
+export DATABRICKS_TOKEN="your-personal-access-token"
+odcs-sync from-file contracts/ --no-oauth
+```
+
+### Option 4: Config File
+
+Create `~/.odcs_sync.yaml`:
 
 ```yaml
-host: "https://your-workspace.cloud.databricks.com"
-http_path: "/sql/1.0/warehouses/your-warehouse-id"
-use_oauth: true
-# token: "your-token"  # Only if not using OAuth
+host: "https://your-workspace.databricks.com"
+http_path: "/sql/1.0/warehouses/xxx"
+
+# Choose one authentication method:
+
+# Service Principal (recommended for automation)
+client_id: "your-client-id"
+client_secret: "your-client-secret"
+
+# Or Personal Access Token
+# token: "your-token"
+# use_oauth: false
 ```
 
-### 2. Create an ODCS Contract
+## Quick Start
+
+### 1. Create an ODCS Contract
 
 Create a file `contracts/customers.yaml`:
 
@@ -115,22 +171,27 @@ tags:
 certification: certified
 ```
 
-### 3. Validate the Contract
+### 2. Validate the Contract
 
 ```bash
 odcs-sync validate contracts/customers.yaml
 ```
 
-### 4. Preview Changes (Dry Run)
+### 3. Preview Changes (Dry Run)
 
 ```bash
-odcs-sync from-file contracts/customers.yaml --dry-run
+odcs-sync from-file contracts/customers.yaml \
+  --host "https://your-workspace.databricks.com" \
+  --http-path "/sql/1.0/warehouses/xxx" \
+  --dry-run
 ```
 
-### 5. Apply Changes
+### 4. Apply Changes
 
 ```bash
-odcs-sync from-file contracts/customers.yaml
+odcs-sync from-file contracts/customers.yaml \
+  --host "https://your-workspace.databricks.com" \
+  --http-path "/sql/1.0/warehouses/xxx"
 ```
 
 ## CLI Reference
@@ -146,30 +207,45 @@ odcs-sync from-file PATH [OPTIONS]
 **Arguments:**
 - `PATH`: Path to YAML file or directory containing contract files
 
-**Options:**
+**Connection Options:**
+- `--host TEXT`: Databricks workspace host URL
+- `--http-path TEXT`: HTTP path for SQL warehouse
+
+**Authentication Options:**
+- `--oauth/--no-oauth`: Use OAuth authentication (default: enabled)
+- `--client-id TEXT`: OAuth client ID for service principal / M2M auth
+- `--client-secret TEXT`: OAuth client secret for service principal / M2M auth
+- `--token TEXT`: Personal Access Token (use with `--no-oauth`)
+
+**Sync Options:**
 - `--dry-run, -n`: Show planned changes without executing
 - `--allow-destructive`: Allow destructive operations (drop columns, remove tags)
 - `--preserve-extra-tags`: Don't remove tags that exist in catalog but not in contract
 - `--catalog-override TEXT`: Override catalog name from contracts
 - `--schema-override TEXT`: Override schema name from contracts
 - `--table-prefix TEXT`: Prefix to add to table names
-- `--host TEXT`: Databricks workspace host URL
-- `--http-path TEXT`: HTTP path for SQL warehouse
-- `--token TEXT`: Personal Access Token (if not using OAuth)
-- `--oauth/--no-oauth`: Use OAuth authentication (default: enabled)
+
+**Output Options:**
 - `--verbose, -v`: Enable verbose output
 - `--quiet, -q`: Suppress non-error output
 
 **Examples:**
 
 ```bash
-# Sync a single file
-odcs-sync from-file contracts/customers.yaml
+# Sync with OAuth (interactive)
+odcs-sync from-file contracts/ --host "https://..." --http-path "/sql/..." --oauth --dry-run
 
-# Sync all contracts in a directory
-odcs-sync from-file contracts/
+# Sync with Service Principal (CI/CD)
+odcs-sync from-file contracts/ \
+  --host "https://your-workspace.databricks.com" \
+  --http-path "/sql/1.0/warehouses/xxx" \
+  --client-id "your-client-id" \
+  --client-secret "your-client-secret"
 
-# Preview changes
+# Sync with Personal Access Token
+odcs-sync from-file contracts/ --no-oauth --token "dapi..."
+
+# Preview changes (dry run)
 odcs-sync from-file contracts/ --dry-run
 
 # Allow dropping columns
