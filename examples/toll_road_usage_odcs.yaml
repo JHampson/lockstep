@@ -1,0 +1,213 @@
+# ODCS Contract for Motorway Toll Road Usage
+# For odcs-sync tool
+
+apiVersion: v3.0.0
+kind: DataContract
+id: toll-road-usage
+name: toll_road_usage_contract
+version: "1.0.0"
+status: active
+description: "Motorway toll road usage records capturing vehicle passages through toll points, including transaction details, vehicle classification, and billing information."
+
+owner: transport-data-team
+team: tolling-operations
+
+dataset:
+  catalog: users
+  schema: jason_hampson
+  table: toll_road_usage
+
+schema:
+  properties:
+    # Transaction identification
+    - name: transaction_id
+      logicalType: string
+      description: "Unique identifier for the toll transaction (UUID)"
+      required: true
+      primaryKey: true
+      tags:
+        data_element: "transaction_identifier"
+
+    - name: passage_timestamp
+      logicalType: timestamp
+      description: "Timestamp when the vehicle passed through the toll point (UTC)"
+      required: true
+      tags:
+        temporal: "event_time"
+
+    # Toll point information
+    - name: toll_point_id
+      logicalType: string
+      description: "Unique identifier for the toll collection point"
+      required: true
+      tags:
+        reference_data: "toll_point"
+
+    - name: motorway_code
+      logicalType: string
+      physicalType: "VARCHAR(10)"
+      description: "Motorway identifier (e.g., M1, M25, A1(M))"
+      required: true
+
+    - name: toll_plaza_name
+      logicalType: string
+      description: "Name of the toll plaza location"
+      required: false
+
+    - name: lane_number
+      logicalType: integer
+      description: "Lane number at the toll point (1-based)"
+      required: false
+
+    - name: direction
+      logicalType: string
+      physicalType: "VARCHAR(20)"
+      description: "Travel direction (northbound, southbound, eastbound, westbound)"
+      required: true
+
+    # Vehicle information
+    - name: vehicle_registration
+      logicalType: string
+      description: "Vehicle registration/license plate number"
+      required: false
+      tags:
+        pii: "true"
+        classification: "sensitive"
+        retention: "7_years"
+
+    - name: vehicle_class
+      logicalType: string
+      physicalType: "VARCHAR(20)"
+      description: "Vehicle classification for toll pricing"
+      required: true
+      tags:
+        reference_data: "vehicle_classification"
+
+    - name: axle_count
+      logicalType: integer
+      description: "Number of axles detected on the vehicle"
+      required: false
+
+    - name: vehicle_height_cm
+      logicalType: integer
+      description: "Vehicle height in centimeters"
+      required: false
+
+    # Payment and account information
+    - name: payment_method
+      logicalType: string
+      physicalType: "VARCHAR(30)"
+      description: "Method of payment (tag_account, anpr_account, cash, card, unpaid)"
+      required: true
+
+    - name: account_id
+      logicalType: string
+      description: "Customer toll account identifier"
+      required: false
+      tags:
+        pii: "true"
+        classification: "confidential"
+
+    - name: tag_id
+      logicalType: string
+      description: "Electronic toll tag identifier (RFID transponder ID)"
+      required: false
+      tags:
+        pii: "true"
+        classification: "sensitive"
+
+    # Pricing information
+    - name: toll_amount
+      logicalType: double
+      description: "Toll charge amount in local currency (GBP)"
+      required: true
+
+    - name: currency_code
+      logicalType: string
+      physicalType: "VARCHAR(3)"
+      description: "ISO 4217 currency code"
+      required: true
+
+    - name: discount_applied
+      logicalType: double
+      description: "Discount amount applied"
+      required: false
+
+    - name: discount_type
+      logicalType: string
+      description: "Type of discount applied"
+      required: false
+
+    - name: vat_amount
+      logicalType: double
+      description: "VAT amount included in the toll"
+      required: false
+
+    # Journey context
+    - name: entry_point_id
+      logicalType: string
+      description: "Entry toll point for distance-based tolling"
+      required: false
+
+    - name: exit_point_id
+      logicalType: string
+      description: "Exit toll point for distance-based tolling"
+      required: false
+
+    - name: journey_distance_km
+      logicalType: double
+      description: "Distance travelled in kilometers"
+      required: false
+
+    # Detection and validation
+    - name: detection_method
+      logicalType: string
+      physicalType: "VARCHAR(20)"
+      description: "How the vehicle was detected (rfid_tag, anpr_camera, manual)"
+      required: true
+
+    - name: confidence_score
+      logicalType: double
+      description: "ANPR confidence score (0.0 to 1.0)"
+      required: false
+
+    - name: image_reference
+      logicalType: string
+      description: "Reference to stored vehicle image"
+      required: false
+      tags:
+        pii: "true"
+        classification: "highly_sensitive"
+
+    - name: requires_review
+      logicalType: boolean
+      description: "Flag indicating if transaction requires manual review"
+      required: false
+
+    # Audit fields
+    - name: created_at
+      logicalType: timestamp
+      description: "Record creation timestamp"
+      required: true
+
+    - name: updated_at
+      logicalType: timestamp
+      description: "Record last update timestamp"
+      required: false
+
+    - name: data_source
+      logicalType: string
+      description: "Source system identifier"
+      required: true
+
+tags:
+  domain: "transport"
+  subdomain: "tolling"
+  team: "tolling-operations"
+  data_product: "toll-analytics"
+  data_classification: "confidential"
+  retention_policy: "7_years"
+  gdpr_relevant: "true"
+
+certification: certified
+

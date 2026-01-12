@@ -1,0 +1,245 @@
+# Data Contract for Motorway Toll Road Usage
+# Compatible with datacontract CLI (datacontract.com)
+
+dataContractSpecification: 0.9.3
+id: toll-road-usage
+info:
+  title: Toll Road Usage Contract
+  version: 1.0.0
+  status: active
+  description: |
+    Motorway toll road usage records capturing vehicle passages through toll points,
+    including transaction details, vehicle classification, and billing information.
+  owner: transport-data-team
+  contact:
+    name: Tolling Operations Team
+    email: tolling-ops@example.com
+
+servers:
+  production:
+    type: databricks
+    catalog: main
+    schema: transport
+
+models:
+  toll_road_usage:
+    type: table
+    description: Records of vehicle passages through motorway toll points
+    fields:
+      # Transaction identification
+      transaction_id:
+        type: string
+        description: Unique identifier for the toll transaction (UUID)
+        required: true
+        primaryKey: true
+        tags:
+          - data_element:transaction_identifier
+
+      passage_timestamp:
+        type: timestamp
+        description: Timestamp when the vehicle passed through the toll point (UTC)
+        required: true
+        tags:
+          - temporal:event_time
+
+      # Toll point information
+      toll_point_id:
+        type: string
+        description: Unique identifier for the toll collection point
+        required: true
+        tags:
+          - reference_data:toll_point
+
+      motorway_code:
+        type: varchar
+        maxLength: 10
+        description: Motorway identifier (e.g., M1, M25, A1(M))
+        required: true
+
+      toll_plaza_name:
+        type: string
+        description: Name of the toll plaza location
+        required: false
+
+      lane_number:
+        type: integer
+        description: Lane number at the toll point (1-based)
+        required: false
+
+      direction:
+        type: varchar
+        maxLength: 20
+        description: Travel direction (northbound, southbound, eastbound, westbound)
+        required: true
+        enum:
+          - northbound
+          - southbound
+          - eastbound
+          - westbound
+
+      # Vehicle information
+      vehicle_registration:
+        type: string
+        description: Vehicle registration/license plate number
+        required: false
+        pii: true
+        classification: sensitive
+        tags:
+          - retention:7_years
+
+      vehicle_class:
+        type: varchar
+        maxLength: 20
+        description: Vehicle classification for toll pricing
+        required: true
+        enum:
+          - motorcycle
+          - car
+          - lgv
+          - hgv_2axle
+          - hgv_3axle
+          - hgv_4plus_axle
+          - coach
+        tags:
+          - reference_data:vehicle_classification
+
+      axle_count:
+        type: integer
+        description: Number of axles detected on the vehicle
+        required: false
+
+      vehicle_height_cm:
+        type: integer
+        description: Vehicle height in centimeters (used for classification)
+        required: false
+
+      # Payment and account information
+      payment_method:
+        type: varchar
+        maxLength: 30
+        description: Method of payment
+        required: true
+        enum:
+          - tag_account
+          - anpr_account
+          - cash
+          - card
+          - unpaid
+
+      account_id:
+        type: string
+        description: Customer toll account identifier (if using tag or ANPR account)
+        required: false
+        pii: true
+        classification: confidential
+
+      tag_id:
+        type: string
+        description: Electronic toll tag identifier (e.g., RFID transponder ID)
+        required: false
+        pii: true
+        classification: sensitive
+
+      # Pricing information
+      toll_amount:
+        type: double
+        description: Toll charge amount in local currency (GBP)
+        required: true
+
+      currency_code:
+        type: varchar
+        maxLength: 3
+        description: ISO 4217 currency code
+        required: true
+
+      discount_applied:
+        type: double
+        description: Discount amount applied (e.g., off-peak, frequent user)
+        required: false
+
+      discount_type:
+        type: string
+        description: Type of discount applied
+        required: false
+        enum:
+          - off_peak
+          - frequent_user
+          - green_vehicle
+          - none
+
+      vat_amount:
+        type: double
+        description: VAT amount included in the toll
+        required: false
+
+      # Journey context
+      entry_point_id:
+        type: string
+        description: Entry toll point for distance-based tolling
+        required: false
+
+      exit_point_id:
+        type: string
+        description: Exit toll point for distance-based tolling
+        required: false
+
+      journey_distance_km:
+        type: double
+        description: Distance travelled in kilometers (for distance-based tolling)
+        required: false
+
+      # Detection and validation
+      detection_method:
+        type: varchar
+        maxLength: 20
+        description: How the vehicle was detected
+        required: true
+        enum:
+          - rfid_tag
+          - anpr_camera
+          - manual
+
+      confidence_score:
+        type: double
+        description: ANPR confidence score (0.0 to 1.0) for camera-based detection
+        required: false
+        minimum: 0.0
+        maximum: 1.0
+
+      image_reference:
+        type: string
+        description: Reference to stored vehicle image for ANPR verification
+        required: false
+        pii: true
+        classification: highly_sensitive
+        tags:
+          - storage:encrypted
+
+      requires_review:
+        type: boolean
+        description: Flag indicating if transaction requires manual review
+        required: false
+
+      # Audit fields
+      created_at:
+        type: timestamp
+        description: Record creation timestamp
+        required: true
+
+      updated_at:
+        type: timestamp
+        description: Record last update timestamp
+        required: false
+
+      data_source:
+        type: string
+        description: Source system identifier (e.g., plaza_system, central_billing)
+        required: true
+
+tags:
+  - domain:transport
+  - subdomain:tolling
+  - data_product:toll-analytics
+  - data_classification:confidential
+  - retention_policy:7_years
+  - gdpr_relevant:true
