@@ -235,8 +235,9 @@ class IntrospectionService:
                             col_tags[tag_name] = str(tag_value)
                     if col_tags:
                         column_tags[col.name] = col_tags
-                except Exception:
-                    pass  # Column might not have tags
+                except Exception as e:
+                    # Column might not have tags or SHOW TAGS syntax not supported
+                    logger.debug(f"Could not fetch tags for column {col.name}: {e}")
         except Exception as e:
             logger.debug(f"Could not fetch column tags: {e}")
 
@@ -276,8 +277,9 @@ class IntrospectionService:
                         column_tags[col_name] = {}
                     column_tags[col_name][tag_name] = str(tag_value)
 
-        except Exception:
-            pass  # information_schema.column_tags might not exist
+        except Exception as e:
+            # information_schema.column_tags might not exist in older Unity Catalog versions
+            logger.debug(f"Could not fetch column tags from information_schema: {e}")
 
         try:
             sql = """
@@ -297,8 +299,9 @@ class IntrospectionService:
                 if tag_name:
                     table_tags[tag_name] = str(tag_value)
 
-        except Exception:
-            pass  # information_schema.table_tags might not exist
+        except Exception as e:
+            # information_schema.table_tags might not exist in older Unity Catalog versions
+            logger.debug(f"Could not fetch table tags from information_schema: {e}")
 
     def get_not_null_columns(self, full_table_name: str) -> set[str]:
         """Get columns that have NOT NULL constraints.

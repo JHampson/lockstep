@@ -64,21 +64,14 @@ def _get_databricks_config(
     client_secret: str | None = None,
 ) -> DatabricksConfig:
     """Build Databricks configuration from CLI options and environment."""
-    kwargs: dict[str, str | bool | None] = {}
-    if host:
-        kwargs["host"] = host
-    if http_path:
-        kwargs["http_path"] = http_path
-    if token:
-        kwargs["token"] = token
-    kwargs["use_oauth"] = use_oauth
-    # Service Principal / OAuth M2M auth
-    if client_id:
-        kwargs["client_id"] = client_id
-    if client_secret:
-        kwargs["client_secret"] = client_secret
-
-    return DatabricksConfig(**kwargs)
+    return DatabricksConfig(
+        host=host or "",
+        http_path=http_path or "",
+        token=token,
+        use_oauth=use_oauth,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
 
 
 def version_callback(value: bool) -> None:

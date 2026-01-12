@@ -23,13 +23,9 @@ logger = logging.getLogger(__name__)
 class DatabricksConnectionError(Exception):
     """Raised when there's an error connecting to Databricks."""
 
-    pass
-
 
 class DatabricksQueryError(Exception):
     """Raised when there's an error executing a query."""
-
-    pass
 
 
 class DatabricksConnector:

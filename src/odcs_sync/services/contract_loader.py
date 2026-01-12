@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import ValidationError
@@ -74,7 +75,7 @@ class ContractLoader:
             parent = path.parent if path.parent.exists() else Path.cwd()
             yield from parent.glob(path.name)
 
-    def _parse_yaml(self, path: Path) -> dict | list | None:
+    def _parse_yaml(self, path: Path) -> dict[str, Any] | list[Any] | None:
         """Parse a YAML file.
 
         Args:
@@ -88,7 +89,8 @@ class ContractLoader:
         """
         try:
             with open(path, encoding="utf-8") as f:
-                return yaml.safe_load(f)
+                result: dict[str, Any] | list[Any] | None = yaml.safe_load(f)
+                return result
         except yaml.YAMLError as e:
             raise ContractLoadError(
                 f"Failed to parse YAML: {e}",

@@ -6,7 +6,6 @@ Produces a structured plan of actions to synchronize a contract.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from odcs_sync.models.catalog_state import (
     ActionType,
@@ -16,9 +15,6 @@ from odcs_sync.models.catalog_state import (
 )
 from odcs_sync.models.contract import CertificationStatus, Contract
 from odcs_sync.services.sql_generator import SQLGenerator
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
