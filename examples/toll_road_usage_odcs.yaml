@@ -71,8 +71,8 @@ schema:
       description: "Vehicle registration/license plate number"
       required: false
       tags:
-        pii: "true"
-        classification: "sensitive"
+        pii: "name"
+        classification: "restricted"
         retention: "7_years"
 
     - name: vehicle_class
@@ -105,16 +105,15 @@ schema:
       description: "Customer toll account identifier"
       required: false
       tags:
-        pii: "true"
-        classification: "confidential"
+        pii: "iban"
+        classification: "restricted"
 
     - name: tag_id
       logicalType: string
       description: "Electronic toll tag identifier (RFID transponder ID)"
       required: false
       tags:
-        pii: "true"
-        classification: "sensitive"
+        classification: "restricted"
 
     # Pricing information
     - name: toll_amount
@@ -176,8 +175,7 @@ schema:
       description: "Reference to stored vehicle image"
       required: false
       tags:
-        pii: "true"
-        classification: "highly_sensitive"
+        classification: "restricted"
 
     - name: requires_review
       logicalType: boolean
@@ -202,11 +200,11 @@ schema:
 
 tags:
   domain: "transport"
-  subdomain: "tolling"
-  team: "tolling-operations"
+  subdomain: "infrastructure"
+  team: "engineers"
   data_product: "toll-analytics"
-  data_classification: "confidential"
-  retention_policy: "7_years"
+  data_classification: "pii"
+  retention_policy: "5_years"
   gdpr_relevant: "true"
 
 certification: certified
