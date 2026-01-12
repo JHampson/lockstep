@@ -204,9 +204,9 @@ class IntrospectionService:
 
         full_name = f"{catalog}.{schema}.{table}"
 
-        # Try to get table tags using SHOW TAGS
+        # Try to get table tags using SHOW TAGS ON TABLE
+        table_tags_fetched = False
         try:
-            # This query format may vary by Databricks runtime version
             tag_sql = f"SHOW TAGS ON TABLE {full_name}"
             tag_rows = self.connector.fetchall(tag_sql)
 
@@ -215,43 +215,29 @@ class IntrospectionService:
                 tag_value = row.get("tag_value") or row.get("value")
                 if tag_name and tag_value is not None:
                     table_tags[tag_name] = str(tag_value)
+            table_tags_fetched = True
 
         except Exception as e:
             logger.debug(f"Could not fetch table tags via SHOW TAGS: {e}")
-            # Fall back to information_schema if available
-            self._get_tags_from_information_schema(catalog, schema, table, table_tags, column_tags)
 
-        # Get column tags
-        try:
-            for col in self._get_columns(catalog, schema, table):
-                col_tag_sql = f"SHOW TAGS ON {full_name}.{col.name}"
-                try:
-                    col_tag_rows = self.connector.fetchall(col_tag_sql)
-                    col_tags: dict[str, str] = {}
-                    for row in col_tag_rows:
-                        tag_name = row.get("tag_name") or row.get("name")
-                        tag_value = row.get("tag_value") or row.get("value")
-                        if tag_name and tag_value is not None:
-                            col_tags[tag_name] = str(tag_value)
-                    if col_tags:
-                        column_tags[col.name] = col_tags
-                except Exception as e:
-                    # Column might not have tags or SHOW TAGS syntax not supported
-                    logger.debug(f"Could not fetch tags for column {col.name}: {e}")
-        except Exception as e:
-            logger.debug(f"Could not fetch column tags: {e}")
+        # Get column tags from information_schema
+        # Note: There is no SHOW TAGS ON column syntax in Databricks SQL
+        self._get_column_tags_from_information_schema(catalog, schema, table, column_tags)
+
+        # Fall back to information_schema for table tags if SHOW TAGS failed
+        if not table_tags_fetched:
+            self._get_table_tags_from_information_schema(catalog, schema, table, table_tags)
 
         return table_tags, column_tags
 
-    def _get_tags_from_information_schema(
+    def _get_column_tags_from_information_schema(
         self,
         catalog: str,
         schema: str,
         table: str,
-        table_tags: dict[str, str],
         column_tags: dict[str, dict[str, str]],
     ) -> None:
-        """Try to get tags from information_schema (newer Unity Catalog versions)."""
+        """Get column tags from information_schema.column_tags."""
         try:
             sql = """
                 SELECT
@@ -281,6 +267,14 @@ class IntrospectionService:
             # information_schema.column_tags might not exist in older Unity Catalog versions
             logger.debug(f"Could not fetch column tags from information_schema: {e}")
 
+    def _get_table_tags_from_information_schema(
+        self,
+        catalog: str,
+        schema: str,
+        table: str,
+        table_tags: dict[str, str],
+    ) -> None:
+        """Get table tags from information_schema.table_tags."""
         try:
             sql = """
                 SELECT tag_name, tag_value
