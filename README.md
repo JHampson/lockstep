@@ -371,6 +371,63 @@ With `--allow-destructive`:
 With `--preserve-extra-tags`:
 - Tags in Unity Catalog but not in contract will be kept
 
+## Exit Codes
+
+The CLI uses specific exit codes for CI/CD integration:
+
+| Exit Code | Meaning |
+|-----------|---------|
+| **0** | Success - no changes needed (in sync) |
+| **1** | Error - sync failed, connection error, or validation error |
+| **2** | Differences detected (dry-run mode only) |
+
+### CI/CD Drift Detection
+
+Use `--dry-run` to detect drift between contracts and Unity Catalog:
+
+```bash
+#!/bin/bash
+odcs-sync from-file contracts/ \
+  --host "$DATABRICKS_HOST" \
+  --http-path "$DATABRICKS_HTTP_PATH" \
+  --client-id "$DATABRICKS_CLIENT_ID" \
+  --client-secret "$DATABRICKS_CLIENT_SECRET" \
+  --dry-run
+
+exit_code=$?
+
+case $exit_code in
+  0)
+    echo "✅ Unity Catalog is in sync with contracts"
+    ;;
+  2)
+    echo "⚠️ Drift detected! Unity Catalog differs from contracts"
+    exit 1  # Fail the CI pipeline
+    ;;
+  *)
+    echo "❌ Error occurred during sync check"
+    exit 1
+    ;;
+esac
+```
+
+### GitHub Actions Example
+
+```yaml
+- name: Check for contract drift
+  env:
+    DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+    DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+    DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+    DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+  run: |
+    odcs-sync from-file contracts/ --dry-run
+    if [ $? -eq 2 ]; then
+      echo "::warning::Contract drift detected"
+      exit 1
+    fi
+```
+
 ## Development
 
 ### Setup
