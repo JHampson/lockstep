@@ -1,6 +1,6 @@
 """Pydantic models for ODCS YAML contracts."""
 
-from odcs_sync.models.contract import (
+from lockstep.models.contract import (
     Column,
     Contract,
     ContractSchema,

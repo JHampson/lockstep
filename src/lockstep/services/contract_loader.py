@@ -10,7 +10,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from odcs_sync.models.contract import Contract
+from lockstep.models.contract import Contract
 
 logger = logging.getLogger(__name__)
 

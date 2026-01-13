@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from databricks import sql as databricks_sql
 
-from odcs_sync.databricks.config import DatabricksConfig
+from lockstep.databricks.config import DatabricksConfig
 
 if TYPE_CHECKING:
     from databricks.sql.client import Connection, Cursor

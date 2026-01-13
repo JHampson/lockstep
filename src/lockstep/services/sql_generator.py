@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from odcs_sync.models.contract import Column
+    from lockstep.models.contract import Column
 
 
 class SQLGenerator:

@@ -3,7 +3,7 @@
 Supports configuration via:
 - Environment variables
 - CLI parameters
-- Config file (~/.odcs_sync.toml or ~/.odcs_sync.yaml)
+- Config file (~/.lockstep.toml or ~/.lockstep.yaml)
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 def _load_config_file() -> dict[str, Any]:
     """Load configuration from file if it exists."""
     config_paths = [
-        Path.home() / ".odcs_sync.yaml",
-        Path.home() / ".odcs_sync.yml",
-        Path.home() / ".odcs_sync.toml",
+        Path.home() / ".lockstep.yaml",
+        Path.home() / ".lockstep.yml",
+        Path.home() / ".lockstep.toml",
     ]
 
     for config_path in config_paths:
@@ -47,7 +47,7 @@ class DatabricksConfig(BaseSettings):
     Configuration is loaded from (in order of precedence):
     1. CLI parameters (passed directly)
     2. Environment variables (DATABRICKS_*)
-    3. Config file (~/.odcs_sync.yaml or ~/.odcs_sync.toml)
+    3. Config file (~/.lockstep.yaml or ~/.lockstep.toml)
     """
 
     model_config = SettingsConfigDict(

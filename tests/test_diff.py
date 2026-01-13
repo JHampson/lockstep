@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from odcs_sync.models.catalog_state import (
+from lockstep.models.catalog_state import (
     ActionType,
     CatalogColumn,
     CatalogConstraint,
     CatalogTable,
 )
-from odcs_sync.models.contract import Contract
-from odcs_sync.services.diff import DiffService
+from lockstep.models.contract import Contract
+from lockstep.services.diff import DiffService
 
 
 class TestDiffService:
@@ -198,7 +198,7 @@ class TestDiffService:
 
     def test_diff_certification_via_tag(self, diff_service: DiffService) -> None:
         """Test diff detects certification changes via system tag."""
-        from odcs_sync.models.contract import ContractSchema, TableInfo
+        from lockstep.models.contract import ContractSchema, TableInfo
 
         # Contract wants certified (via tag)
         contract = Contract(
@@ -226,7 +226,7 @@ class TestDiffService:
 
     def test_diff_clear_certification_via_tag(self, diff_service: DiffService) -> None:
         """Test diff detects certification removal via tag."""
-        from odcs_sync.models.contract import ContractSchema, TableInfo
+        from lockstep.models.contract import ContractSchema, TableInfo
 
         # Contract wants no certification (no tag)
         contract = Contract(

@@ -9,13 +9,13 @@ import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from odcs_sync.models.catalog_state import SyncPlan
-from odcs_sync.models.contract import Contract
-from odcs_sync.services.diff import DiffService
-from odcs_sync.services.introspection import IntrospectionService
+from lockstep.models.catalog_state import SyncPlan
+from lockstep.models.contract import Contract
+from lockstep.services.diff import DiffService
+from lockstep.services.introspection import IntrospectionService
 
 if TYPE_CHECKING:
-    from odcs_sync.databricks.connector import DatabricksConnector
+    from lockstep.databricks.connector import DatabricksConnector
 
 logger = logging.getLogger(__name__)
 

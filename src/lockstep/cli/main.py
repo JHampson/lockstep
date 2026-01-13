@@ -1,6 +1,6 @@
-"""Main CLI entry point for ODCS Sync.
+"""Main CLI entry point for Lockstep.
 
-Provides commands for synchronizing ODCS contracts to Databricks Unity Catalog.
+Provides commands for synchronizing data contracts to Databricks Unity Catalog.
 """
 
 from __future__ import annotations
@@ -15,17 +15,17 @@ from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.table import Table
 
-from odcs_sync import __version__
-from odcs_sync.cli.formatters import format_plan, format_sync_results, format_validation_report
-from odcs_sync.databricks import DatabricksConfig, DatabricksConnector
-from odcs_sync.databricks.connector import DatabricksConnectionError
-from odcs_sync.services import ContractLoader, ContractLoadError, SyncService
-from odcs_sync.services.sync import SyncOptions
+from lockstep import __version__
+from lockstep.cli.formatters import format_plan, format_sync_results, format_validation_report
+from lockstep.databricks import DatabricksConfig, DatabricksConnector
+from lockstep.databricks.connector import DatabricksConnectionError
+from lockstep.services import ContractLoader, ContractLoadError, SyncService
+from lockstep.services.sync import SyncOptions
 
 # Initialize CLI app
 app = typer.Typer(
-    name="odcs-sync",
-    help="Synchronize Open Data Contract Standard (ODCS) YAML to Databricks Unity Catalog.",
+    name="lockstep",
+    help="Synchronize data contracts to Databricks Unity Catalog.",
     add_completion=True,
     rich_markup_mode="rich",
 )
@@ -81,7 +81,7 @@ def _get_databricks_config(
 def version_callback(value: bool) -> None:
     """Print version and exit."""
     if value:
-        console.print(f"odcs-sync version {__version__}")
+        console.print(f"lockstep version {__version__}")
         raise typer.Exit()
 
 
@@ -98,7 +98,7 @@ def main(
         ),
     ] = None,
 ) -> None:
-    """ODCS Sync - Synchronize data contracts to Unity Catalog."""
+    """Lockstep - Synchronize data contracts to Unity Catalog."""
     pass
 
 
@@ -238,16 +238,16 @@ def sync_from_file(
     Examples:
 
         # Sync a single contract file
-        $ odcs-sync from-file contracts/customer.yaml
+        $ lockstep from-file contracts/customer.yaml
 
         # Sync all contracts in a directory (dry run)
-        $ odcs-sync from-file contracts/ --dry-run
+        $ lockstep from-file contracts/ --dry-run
 
         # Sync with catalog override
-        $ odcs-sync from-file contracts/ --catalog-override dev_catalog
+        $ lockstep from-file contracts/ --catalog-override dev_catalog
 
         # Allow destructive changes (column drops)
-        $ odcs-sync from-file contracts/ --allow-destructive
+        $ lockstep from-file contracts/ --allow-destructive
     """
     _setup_logging(verbose, quiet)
 
@@ -289,7 +289,7 @@ def sync_from_file(
                 "Please provide connection details via:\n"
                 "  • Environment variables: DATABRICKS_HOST, DATABRICKS_HTTP_PATH\n"
                 "  • CLI options: --host, --http-path\n"
-                "  • Config file: ~/.odcs_sync.yaml\n"
+                "  • Config file: ~/.lockstep.yaml\n"
             )
             raise typer.Exit(1)
     except Exception as e:
@@ -374,10 +374,10 @@ def validate(
     Examples:
 
         # Validate a single file
-        $ odcs-sync validate contracts/customer.yaml
+        $ lockstep validate contracts/customer.yaml
 
         # Validate all files in a directory
-        $ odcs-sync validate contracts/
+        $ lockstep validate contracts/
     """
     _setup_logging(verbose, quiet=False)
 

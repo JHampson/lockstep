@@ -6,15 +6,15 @@ from pathlib import Path
 
 from rich.panel import Panel
 
-from odcs_sync.cli.formatters import (
+from lockstep.cli.formatters import (
     ACTION_STYLES,
     format_plan,
     format_sync_results,
     format_validation_report,
 )
-from odcs_sync.models.catalog_state import ActionType, SyncAction, SyncPlan
-from odcs_sync.services.contract_loader import ContractLoadError
-from odcs_sync.services.sync import SyncResult
+from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
+from lockstep.services.contract_loader import ContractLoadError
+from lockstep.services.sync import SyncResult
 
 
 class TestFormatPlan:

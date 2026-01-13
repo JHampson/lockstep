@@ -1,12 +1,12 @@
 [project]
-name = "odcs-sync"
+name = "lockstep"
 version = "0.1.0"
-description = "CLI tool to synchronize Open Data Contract Standard (ODCS) YAML specifications to Databricks Unity Catalog"
+description = "CLI tool to synchronize data contracts to Databricks Unity Catalog"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "Contract Sync Team" }]
-keywords = ["databricks", "unity-catalog", "odcs", "data-contracts", "cli"]
+authors = [{ name = "Lockstep Team" }]
+keywords = ["databricks", "unity-catalog", "data-contracts", "cli", "schema-sync"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
@@ -36,17 +36,17 @@ dev = [
 ]
 
 [project.scripts]
-odcs-sync = "odcs_sync.cli.main:app"
+lockstep = "lockstep.cli.main:app"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/odcs_sync"]
+packages = ["src/lockstep"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/odcs_sync"]
+include = ["src/lockstep"]
 
 [tool.ruff]
 src = ["src"]
@@ -95,7 +95,7 @@ pythonpath = ["src"]
 addopts = "-v --tb=short"
 
 [tool.coverage.run]
-source = ["src/odcs_sync"]
+source = ["src/lockstep"]
 branch = true
 
 [tool.coverage.report]
@@ -104,4 +104,3 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
-

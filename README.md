@@ -1,4 +1,4 @@
-# ODCS Sync
+# Lockstep
 
 A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https://bitol-io.github.io/open-data-contract-standard/) YAML specifications to Databricks Unity Catalog.
 
@@ -23,18 +23,18 @@ Install as a global CLI tool with an isolated environment:
 uv tool install --python python3.11 /path/to/contract_sync
 
 # From git repository
-uv tool install --python python3.11 git+https://github.com/your-org/odcs-sync.git
+uv tool install --python python3.11 git+https://github.com/your-org/lockstep.git
 
 # Upgrade to latest version
-uv tool upgrade odcs-sync
+uv tool upgrade lockstep
 
 # Uninstall
-uv tool uninstall odcs-sync
+uv tool uninstall lockstep
 ```
 
 The tool installs to:
-- **Isolated environment**: `~/.local/share/uv/tools/odcs-sync/`
-- **Executable symlink**: `~/.local/bin/odcs-sync`
+- **Isolated environment**: `~/.local/share/uv/tools/lockstep/`
+- **Executable symlink**: `~/.local/bin/lockstep`
 
 > **Note:** Ensure `~/.local/bin` is in your `$PATH`
 
@@ -42,8 +42,8 @@ The tool installs to:
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/odcs-sync.git
-cd odcs-sync
+git clone https://github.com/your-org/lockstep.git
+cd lockstep
 pip install .
 
 # Or install in development mode
@@ -56,8 +56,8 @@ Run directly from source without installing:
 
 ```bash
 cd /path/to/contract_sync
-uv run odcs-sync --help
-uv run odcs-sync from-file contracts/ --dry-run
+uv run lockstep --help
+uv run lockstep from-file contracts/ --dry-run
 ```
 
 ### Building Standalone Executable
@@ -69,10 +69,10 @@ Build a standalone executable (~34MB) that doesn't require Python:
 uv pip install pyinstaller
 
 # Build the executable
-uv run pyinstaller --onefile --name odcs-sync --clean src/odcs_sync/cli/main.py
+uv run pyinstaller --onefile --name lockstep --clean src/lockstep/cli/main.py
 
 # Run it
-./dist/odcs-sync --version
+./dist/lockstep --version
 ```
 
 > **Note:** PyInstaller builds are platform-specific. Build on macOS for macOS, Linux for Linux, etc.
@@ -90,7 +90,7 @@ Uses the Databricks SDK credential chain (Azure CLI, Databricks CLI, environment
 databricks auth login --host https://your-workspace.databricks.com
 
 # Then run the tool
-odcs-sync from-file contracts/ \
+lockstep from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --oauth
@@ -101,7 +101,7 @@ odcs-sync from-file contracts/ \
 Works on both AWS and Azure Databricks:
 
 ```bash
-odcs-sync from-file contracts/ \
+lockstep from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --client-id "your-client-id" \
@@ -116,13 +116,13 @@ export DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/xxx"
 export DATABRICKS_CLIENT_ID="your-client-id"
 export DATABRICKS_CLIENT_SECRET="your-client-secret"
 
-odcs-sync from-file contracts/
+lockstep from-file contracts/
 ```
 
 ### Option 3: Personal Access Token
 
 ```bash
-odcs-sync from-file contracts/ \
+lockstep from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --no-oauth \
@@ -133,12 +133,12 @@ Or via environment variable:
 
 ```bash
 export DATABRICKS_TOKEN="your-personal-access-token"
-odcs-sync from-file contracts/ --no-oauth
+lockstep from-file contracts/ --no-oauth
 ```
 
 ### Option 4: Config File
 
-Create `~/.odcs_sync.yaml`:
+Create `~/.lockstep.yaml`:
 
 ```yaml
 host: "https://your-workspace.databricks.com"
@@ -220,13 +220,13 @@ tags:
 ### 2. Validate the Contract
 
 ```bash
-odcs-sync validate contracts/customers.yaml
+lockstep validate contracts/customers.yaml
 ```
 
 ### 3. Preview Changes (Dry Run)
 
 ```bash
-odcs-sync from-file contracts/customers.yaml \
+lockstep from-file contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --dry-run
@@ -235,19 +235,19 @@ odcs-sync from-file contracts/customers.yaml \
 ### 4. Apply Changes
 
 ```bash
-odcs-sync from-file contracts/customers.yaml \
+lockstep from-file contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx"
 ```
 
 ## CLI Reference
 
-### `odcs-sync from-file`
+### `lockstep from-file`
 
 Synchronize ODCS contracts to Unity Catalog.
 
 ```bash
-odcs-sync from-file PATH [OPTIONS]
+lockstep from-file PATH [OPTIONS]
 ```
 
 **Arguments:**
@@ -279,37 +279,37 @@ odcs-sync from-file PATH [OPTIONS]
 
 ```bash
 # Sync with OAuth (interactive)
-odcs-sync from-file contracts/ --host "https://..." --sql-endpoint "/sql/..." --oauth --dry-run
+lockstep from-file contracts/ --host "https://..." --sql-endpoint "/sql/..." --oauth --dry-run
 
 # Sync with Service Principal (CI/CD)
-odcs-sync from-file contracts/ \
+lockstep from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --client-id "your-client-id" \
   --client-secret "your-client-secret"
 
 # Sync with Personal Access Token
-odcs-sync from-file contracts/ --no-oauth --token "dapi..."
+lockstep from-file contracts/ --no-oauth --token "dapi..."
 
 # Preview changes (dry run)
-odcs-sync from-file contracts/ --dry-run
+lockstep from-file contracts/ --dry-run
 
 # Allow dropping columns
-odcs-sync from-file contracts/ --allow-destructive
+lockstep from-file contracts/ --allow-destructive
 
 # Override catalog for dev environment
-odcs-sync from-file contracts/ --catalog-override dev_catalog
+lockstep from-file contracts/ --catalog-override dev_catalog
 
 # Preserve extra tags in Unity Catalog
-odcs-sync from-file contracts/ --preserve-extra-tags
+lockstep from-file contracts/ --preserve-extra-tags
 ```
 
-### `odcs-sync validate`
+### `lockstep validate`
 
 Validate ODCS contract files without syncing.
 
 ```bash
-odcs-sync validate PATH [OPTIONS]
+lockstep validate PATH [OPTIONS]
 ```
 
 **Arguments:**
@@ -322,10 +322,10 @@ odcs-sync validate PATH [OPTIONS]
 
 ```bash
 # Validate a single file
-odcs-sync validate contracts/customers.yaml
+lockstep validate contracts/customers.yaml
 
 # Validate all files in a directory
-odcs-sync validate contracts/
+lockstep validate contracts/
 ```
 
 ## ODCS Contract Schema
@@ -433,7 +433,7 @@ Use `--dry-run` to detect drift between contracts and Unity Catalog:
 
 ```bash
 #!/bin/bash
-odcs-sync from-file contracts/ \
+lockstep from-file contracts/ \
   --host "$DATABRICKS_HOST" \
   --sql-endpoint "$DATABRICKS_HTTP_PATH" \
   --client-id "$DATABRICKS_CLIENT_ID" \
@@ -489,14 +489,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           
-      - name: Install odcs-sync
+      - name: Install lockstep
         run: |
           pip install uv
-          uv tool install odcs-sync
+          uv tool install lockstep
           
       - name: Validate contract syntax
         run: |
-          odcs-sync validate contracts/
+          lockstep validate contracts/
 
   drift-check:
     name: Check for Drift
@@ -512,10 +512,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           
-      - name: Install odcs-sync
+      - name: Install lockstep
         run: |
           pip install uv
-          uv tool install odcs-sync
+          uv tool install lockstep
           
       - name: Check for contract drift
         id: check
@@ -526,7 +526,7 @@ jobs:
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
           set +e
-          odcs-sync from-file contracts/ --dry-run
+          lockstep from-file contracts/ --dry-run
           exit_code=$?
           set -e
           
@@ -555,10 +555,10 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           
-      - name: Install odcs-sync
+      - name: Install lockstep
         run: |
           pip install uv
-          uv tool install odcs-sync
+          uv tool install lockstep
           
       - name: Apply contract changes
         env:
@@ -567,7 +567,7 @@ jobs:
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
-          odcs-sync from-file contracts/
+          lockstep from-file contracts/
           
       - name: Summary
         run: |
@@ -618,11 +618,11 @@ stages:
               
           - script: |
               pip install uv
-              uv tool install odcs-sync
-            displayName: 'Install odcs-sync'
+              uv tool install lockstep
+            displayName: 'Install lockstep'
             
           - script: |
-              odcs-sync validate contracts/
+              lockstep validate contracts/
             displayName: 'Validate contract syntax'
 
   - stage: CheckDrift
@@ -639,11 +639,11 @@ stages:
               
           - script: |
               pip install uv
-              uv tool install odcs-sync
-            displayName: 'Install odcs-sync'
+              uv tool install lockstep
+            displayName: 'Install lockstep'
             
           - script: |
-              odcs-sync from-file contracts/ --dry-run
+              lockstep from-file contracts/ --dry-run
               exit_code=$?
               if [ $exit_code -eq 2 ]; then
                 echo "##vso[task.logissue type=warning]Contract drift detected"
@@ -681,11 +681,11 @@ stages:
                     
                 - script: |
                     pip install uv
-                    uv tool install odcs-sync
-                  displayName: 'Install odcs-sync'
+                    uv tool install lockstep
+                  displayName: 'Install lockstep'
                   
                 - script: |
-                    odcs-sync from-file contracts/
+                    lockstep from-file contracts/
                   displayName: 'Apply contract changes'
                   env:
                     DATABRICKS_HOST: $(DATABRICKS_HOST)
@@ -708,8 +708,8 @@ Create a variable group named `databricks-credentials` in Azure DevOps with:
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/odcs-sync.git
-cd odcs-sync
+git clone https://github.com/your-org/lockstep.git
+cd lockstep
 uv venv
 source .venv/bin/activate
 uv pip install -e ".[dev]"
@@ -722,7 +722,7 @@ uv pip install -e ".[dev]"
 pytest
 
 # Run with coverage
-pytest --cov=odcs_sync --cov-report=html
+pytest --cov=lockstep --cov-report=html
 
 # Run specific test file
 pytest tests/test_models.py -v
@@ -754,7 +754,7 @@ make all       # Run all checks
 ## Architecture
 
 ```
-src/odcs_sync/
+src/lockstep/
 ├── __init__.py
 ├── models/           # Pydantic models
 │   ├── contract.py   # ODCS contract models

@@ -13,9 +13,9 @@ from rich.table import Table
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from odcs_sync.models.catalog_state import SyncPlan
-    from odcs_sync.services.contract_loader import ContractLoadError
-    from odcs_sync.services.sync import SyncResult
+    from lockstep.models.catalog_state import SyncPlan
+    from lockstep.services.contract_loader import ContractLoadError
+    from lockstep.services.sync import SyncResult
 
 
 # Action type icons and colors

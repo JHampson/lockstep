@@ -1,7 +1,7 @@
 """Databricks SQL connector and data access layer."""
 
-from odcs_sync.databricks.config import DatabricksConfig
-from odcs_sync.databricks.connector import DatabricksConnector
+from lockstep.databricks.config import DatabricksConfig
+from lockstep.databricks.connector import DatabricksConnector
 
 __all__ = [
     "DatabricksConfig",

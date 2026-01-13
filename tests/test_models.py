@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from odcs_sync.models.contract import (
+from lockstep.models.contract import (
     Column,
     Contract,
     ContractSchema,

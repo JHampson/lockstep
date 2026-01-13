@@ -8,10 +8,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from odcs_sync.models.catalog_state import CatalogColumn, CatalogConstraint, CatalogTable
+from lockstep.models.catalog_state import CatalogColumn, CatalogConstraint, CatalogTable
 
 if TYPE_CHECKING:
-    from odcs_sync.databricks.connector import DatabricksConnector
+    from lockstep.databricks.connector import DatabricksConnector
 
 logger = logging.getLogger(__name__)
 

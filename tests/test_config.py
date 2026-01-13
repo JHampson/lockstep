@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from odcs_sync.databricks.config import DatabricksConfig, _load_config_file
+from lockstep.databricks.config import DatabricksConfig, _load_config_file
 
 
 class TestDatabricksConfig:
@@ -138,59 +138,59 @@ class TestLoadConfigFile:
 
     def test_returns_empty_dict_when_no_config_file(self, tmp_path: Path) -> None:
         """Test that empty dict is returned when no config file exists."""
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result == {}
 
     def test_loads_yaml_config_file(self, tmp_path: Path) -> None:
         """Test that YAML config file is loaded."""
-        config_file = tmp_path / ".odcs_sync.yaml"
+        config_file = tmp_path / ".lockstep.yaml"
         config_file.write_text("host: https://yaml-test.databricks.com\nhttp_path: /sql/yaml")
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://yaml-test.databricks.com"
             assert result["http_path"] == "/sql/yaml"
 
     def test_loads_yml_config_file(self, tmp_path: Path) -> None:
         """Test that .yml config file is loaded."""
-        config_file = tmp_path / ".odcs_sync.yml"
+        config_file = tmp_path / ".lockstep.yml"
         config_file.write_text("host: https://yml-test.databricks.com")
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://yml-test.databricks.com"
 
     def test_yaml_takes_precedence_over_yml(self, tmp_path: Path) -> None:
         """Test that .yaml file takes precedence over .yml."""
-        yaml_file = tmp_path / ".odcs_sync.yaml"
+        yaml_file = tmp_path / ".lockstep.yaml"
         yaml_file.write_text("host: https://yaml-first.databricks.com")
-        yml_file = tmp_path / ".odcs_sync.yml"
+        yml_file = tmp_path / ".lockstep.yml"
         yml_file.write_text("host: https://yml-second.databricks.com")
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://yaml-first.databricks.com"
 
     def test_handles_empty_yaml_file(self, tmp_path: Path) -> None:
         """Test that empty YAML file returns empty dict."""
-        config_file = tmp_path / ".odcs_sync.yaml"
+        config_file = tmp_path / ".lockstep.yaml"
         config_file.write_text("")
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result == {}
 
     def test_loads_toml_config_file(self, tmp_path: Path) -> None:
         """Test that TOML config file is loaded."""
-        config_file = tmp_path / ".odcs_sync.toml"
+        config_file = tmp_path / ".lockstep.toml"
         config_file.write_text(
             'host = "https://toml-test.databricks.com"\n'
             'http_path = "/sql/toml"\n'
             "timeout_seconds = 600\n"
         )
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://toml-test.databricks.com"
             assert result["http_path"] == "/sql/toml"
@@ -198,18 +198,18 @@ class TestLoadConfigFile:
 
     def test_yaml_takes_precedence_over_toml(self, tmp_path: Path) -> None:
         """Test that .yaml file takes precedence over .toml."""
-        yaml_file = tmp_path / ".odcs_sync.yaml"
+        yaml_file = tmp_path / ".lockstep.yaml"
         yaml_file.write_text("host: https://yaml-first.databricks.com")
-        toml_file = tmp_path / ".odcs_sync.toml"
+        toml_file = tmp_path / ".lockstep.toml"
         toml_file.write_text('host = "https://toml-second.databricks.com"')
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://yaml-first.databricks.com"
 
     def test_toml_config_with_service_principal(self, tmp_path: Path) -> None:
         """Test that TOML config loads service principal credentials."""
-        config_file = tmp_path / ".odcs_sync.toml"
+        config_file = tmp_path / ".lockstep.toml"
         config_file.write_text(
             'host = "https://toml-sp.databricks.com"\n'
             'http_path = "/sql/test"\n'
@@ -217,7 +217,7 @@ class TestLoadConfigFile:
             'client_secret = "my-client-secret"\n'
         )
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://toml-sp.databricks.com"
             assert result["client_id"] == "my-client-id"
@@ -225,7 +225,7 @@ class TestLoadConfigFile:
 
     def test_toml_config_integrates_with_databricks_config(self, tmp_path: Path) -> None:
         """Test that TOML config integrates with DatabricksConfig model."""
-        config_file = tmp_path / ".odcs_sync.toml"
+        config_file = tmp_path / ".lockstep.toml"
         config_file.write_text(
             'host = "https://toml-integration.databricks.com"\n'
             'http_path = "/sql/integration"\n'
@@ -233,7 +233,7 @@ class TestLoadConfigFile:
             'token = "toml-token"\n'
         )
 
-        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+        with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             config = DatabricksConfig()
             assert config.host == "https://toml-integration.databricks.com"
             assert config.http_path == "/sql/integration"

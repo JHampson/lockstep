@@ -6,9 +6,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from odcs_sync.models.catalog_state import ActionType, CatalogTable, SyncAction, SyncPlan
-from odcs_sync.models.contract import Column, Contract, ContractSchema, TableInfo
-from odcs_sync.services.sync import SyncOptions, SyncResult, SyncService
+from lockstep.models.catalog_state import ActionType, CatalogTable, SyncAction, SyncPlan
+from lockstep.models.contract import Column, Contract, ContractSchema, TableInfo
+from lockstep.services.sync import SyncOptions, SyncResult, SyncService
 
 
 @pytest.fixture

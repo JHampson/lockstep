@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 import yaml
 
-from odcs_sync.models.catalog_state import CatalogColumn, CatalogConstraint, CatalogTable
-from odcs_sync.models.contract import Contract
+from lockstep.models.catalog_state import CatalogColumn, CatalogConstraint, CatalogTable
+from lockstep.models.contract import Contract
 
 
 @pytest.fixture

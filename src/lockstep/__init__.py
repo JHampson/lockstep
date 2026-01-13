@@ -1,9 +1,9 @@
-"""ODCS Sync - Synchronize Open Data Contract Standard YAML to Databricks Unity Catalog."""
+"""Lockstep - Synchronize data contracts to Databricks Unity Catalog."""
 
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("odcs-sync")
+    __version__ = version("lockstep")
 except PackageNotFoundError:
     # Package not installed (running from source)
     __version__ = "0.0.0-dev"

@@ -6,8 +6,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from odcs_sync.models.catalog_state import CatalogTable
-from odcs_sync.services.introspection import IntrospectionService
+from lockstep.models.catalog_state import CatalogTable
+from lockstep.services.introspection import IntrospectionService
 
 
 @pytest.fixture

@@ -7,14 +7,14 @@ from __future__ import annotations
 
 import logging
 
-from odcs_sync.models.catalog_state import (
+from lockstep.models.catalog_state import (
     ActionType,
     CatalogTable,
     SyncAction,
     SyncPlan,
 )
-from odcs_sync.models.contract import Contract
-from odcs_sync.services.sql_generator import SQLGenerator
+from lockstep.models.contract import Contract
+from lockstep.services.sql_generator import SQLGenerator
 
 logger = logging.getLogger(__name__)
 

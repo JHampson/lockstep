@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from odcs_sync.models.contract import Column
-from odcs_sync.services.sql_generator import SQLGenerator
+from lockstep.models.contract import Column
+from lockstep.services.sql_generator import SQLGenerator
 
 
 class TestSQLGenerator:

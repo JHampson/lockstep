@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import yaml
 
-from odcs_sync.services.contract_loader import ContractLoader, ContractLoadError
+from lockstep.services.contract_loader import ContractLoader, ContractLoadError
 
 
 class TestContractLoader:

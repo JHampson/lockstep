@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from odcs_sync.cli.main import _get_databricks_config, app
-from odcs_sync.models.catalog_state import ActionType, SyncAction, SyncPlan
-from odcs_sync.services.sync import SyncResult
+from lockstep.cli.main import _get_databricks_config, app
+from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
+from lockstep.services.sync import SyncResult
 
 runner = CliRunner()
 
@@ -21,13 +21,13 @@ class TestVersionCommand:
         """Test that --version shows version."""
         result = runner.invoke(app, ["--version"])
         assert result.exit_code == 0
-        assert "odcs-sync version" in result.stdout
+        assert "lockstep version" in result.stdout
 
     def test_version_short_flag(self) -> None:
         """Test that -V shows version."""
         result = runner.invoke(app, ["-V"])
         assert result.exit_code == 0
-        assert "odcs-sync version" in result.stdout
+        assert "lockstep version" in result.stdout
 
 
 class TestValidateCommand:
@@ -80,8 +80,8 @@ class TestFromFileCommand:
     def test_from_file_dry_run_no_changes(self, tmp_contract_file: Path) -> None:
         """Test dry run when no changes needed."""
         with (
-            patch("odcs_sync.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("odcs_sync.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -124,8 +124,8 @@ class TestFromFileCommand:
     def test_from_file_dry_run_with_changes(self, tmp_contract_file: Path) -> None:
         """Test dry run when changes are detected."""
         with (
-            patch("odcs_sync.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("odcs_sync.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -176,8 +176,8 @@ class TestFromFileCommand:
     def test_from_file_actual_sync(self, tmp_contract_file: Path) -> None:
         """Test actual sync (not dry run)."""
         with (
-            patch("odcs_sync.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("odcs_sync.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -214,8 +214,8 @@ class TestFromFileCommand:
     def test_from_file_with_overrides(self, tmp_contract_file: Path) -> None:
         """Test from-file with catalog/schema overrides."""
         with (
-            patch("odcs_sync.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("odcs_sync.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -259,8 +259,8 @@ class TestFromFileCommand:
     def test_from_file_allow_destructive(self, tmp_contract_file: Path) -> None:
         """Test --allow-destructive flag."""
         with (
-            patch("odcs_sync.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("odcs_sync.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -296,8 +296,8 @@ class TestFromFileCommand:
     def test_from_file_preserve_extra_tags(self, tmp_contract_file: Path) -> None:
         """Test --preserve-extra-tags flag."""
         with (
-            patch("odcs_sync.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("odcs_sync.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
