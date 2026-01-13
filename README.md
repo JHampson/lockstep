@@ -1,6 +1,6 @@
 # ODCS Sync
 
-A production-grade Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https://bitol-io.github.io/open-data-contract-standard/) YAML specifications to Databricks Unity Catalog.
+A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https://bitol-io.github.io/open-data-contract-standard/) YAML specifications to Databricks Unity Catalog.
 
 ## Features
 
@@ -12,24 +12,7 @@ A production-grade Python CLI tool for synchronizing [Open Data Contract Standar
 - **Dry Run Mode**: Preview changes before applying them
 - **Rich CLI Output**: Beautiful, informative terminal output
 
-## Installation
 
-### Using uv (recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/odcs-sync.git
-cd odcs-sync
-
-# Install with uv
-uv pip install -e ".[dev]"
-```
-
-### Using pip
-
-```bash
-pip install -e ".[dev]"
-```
 
 ## Authentication
 
@@ -477,6 +460,53 @@ make typecheck # Run mypy
 make all       # Run all checks
 ```
 
+### Building Standalone Executable
+
+Build a standalone executable that doesn't require Python to be installed:
+
+```bash
+# Install PyInstaller
+uv pip install pyinstaller
+
+# Build the executable
+uv run pyinstaller --onefile --name odcs-sync --clean src/odcs_sync/cli/main.py
+
+# The executable will be in dist/odcs-sync
+./dist/odcs-sync --version
+```
+
+The resulting executable (~34MB) includes all dependencies and can be distributed without requiring Python.
+
+**Build for different platforms:**
+
+```bash
+# macOS (ARM)
+pyinstaller --onefile --name odcs-sync-macos-arm64 src/odcs_sync/cli/main.py
+
+# macOS (Intel)
+pyinstaller --onefile --name odcs-sync-macos-x64 src/odcs_sync/cli/main.py
+
+# Linux (build on Linux)
+pyinstaller --onefile --name odcs-sync-linux src/odcs_sync/cli/main.py
+
+# Windows (build on Windows)
+pyinstaller --onefile --name odcs-sync.exe src/odcs_sync/cli/main.py
+```
+
+> **Note:** PyInstaller builds are platform-specific. To build for a different platform, you need to run PyInstaller on that platform.
+
+### Running with UV (without installation)
+
+You can run the tool directly using `uv` without building an executable:
+
+```bash
+# Run directly from source
+uv run odcs-sync --help
+
+# Run with specific Python version
+uv run --python 3.12 odcs-sync from-file contracts/ --dry-run
+```
+
 ## Architecture
 
 ```
@@ -508,11 +538,5 @@ The tool is designed to be extensible:
 - **Custom SQL**: Extend `SQLGenerator` for additional operations
 - **New Commands**: Add Typer commands in `cli/main.py`
 
-## License
 
-MIT License - see LICENSE file for details.
-
-## Contributing
-
-Contributions welcome! Please read CONTRIBUTING.md for guidelines.
 
