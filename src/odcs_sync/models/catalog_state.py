@@ -101,6 +101,22 @@ class SyncAction:
         return f"[{self.action_type.value}] {self.description}"
 
 
+# Action types that are considered destructive (data loss or breaking changes)
+DESTRUCTIVE_ACTION_TYPES: frozenset[ActionType] = frozenset({
+    ActionType.DROP_COLUMN,
+    ActionType.REMOVE_TABLE_TAG,
+    ActionType.REMOVE_COLUMN_TAG,
+    ActionType.DROP_PRIMARY_KEY,
+    ActionType.DROP_NOT_NULL,
+})
+
+# Action types for tag removal (subset of destructive)
+TAG_REMOVAL_ACTION_TYPES: frozenset[ActionType] = frozenset({
+    ActionType.REMOVE_TABLE_TAG,
+    ActionType.REMOVE_COLUMN_TAG,
+})
+
+
 @dataclass
 class SyncPlan:
     """A complete plan of actions to synchronize a contract to Unity Catalog."""
@@ -117,26 +133,12 @@ class SyncPlan:
     @property
     def has_destructive_changes(self) -> bool:
         """Check if the plan contains destructive changes."""
-        destructive_types = {
-            ActionType.DROP_COLUMN,
-            ActionType.REMOVE_TABLE_TAG,
-            ActionType.REMOVE_COLUMN_TAG,
-            ActionType.DROP_PRIMARY_KEY,
-            ActionType.DROP_NOT_NULL,
-        }
-        return any(action.action_type in destructive_types for action in self.actions)
+        return any(action.action_type in DESTRUCTIVE_ACTION_TYPES for action in self.actions)
 
     def filter_non_destructive(self) -> SyncPlan:
         """Return a new plan with only non-destructive actions."""
-        destructive_types = {
-            ActionType.DROP_COLUMN,
-            ActionType.REMOVE_TABLE_TAG,
-            ActionType.REMOVE_COLUMN_TAG,
-            ActionType.DROP_PRIMARY_KEY,
-            ActionType.DROP_NOT_NULL,
-        }
         filtered_actions = [
-            action for action in self.actions if action.action_type not in destructive_types
+            action for action in self.actions if action.action_type not in DESTRUCTIVE_ACTION_TYPES
         ]
         return SyncPlan(
             contract_name=self.contract_name,
@@ -146,12 +148,8 @@ class SyncPlan:
 
     def filter_preserve_extra_tags(self) -> SyncPlan:
         """Return a new plan without tag removal actions."""
-        tag_removal_types = {
-            ActionType.REMOVE_TABLE_TAG,
-            ActionType.REMOVE_COLUMN_TAG,
-        }
         filtered_actions = [
-            action for action in self.actions if action.action_type not in tag_removal_types
+            action for action in self.actions if action.action_type not in TAG_REMOVAL_ACTION_TYPES
         ]
         return SyncPlan(
             contract_name=self.contract_name,
