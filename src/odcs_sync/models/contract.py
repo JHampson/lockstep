@@ -21,14 +21,6 @@ class ContractStatus(str, Enum):
     RETIRED = "retired"
 
 
-class CertificationStatus(str, Enum):
-    """Unity Catalog certification status for tables."""
-
-    CERTIFIED = "certified"
-    DEPRECATED = "deprecated"
-    NOT_CERTIFIED = "not_certified"
-
-
 class DataType(str, Enum):
     """Logical data types supported in ODCS contracts.
 
@@ -204,11 +196,7 @@ class Contract(BaseModel):
     # Table-level metadata
     tags: dict[str, str] = Field(
         default_factory=dict,
-        description="Table-level key-value tags",
-    )
-    certification: CertificationStatus = Field(
-        default=CertificationStatus.NOT_CERTIFIED,
-        description="Unity Catalog certification status",
+        description="Table-level key-value tags (use 'system.certification_status' for certification)",
     )
 
     # Owner info (optional, for future use)

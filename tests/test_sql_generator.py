@@ -160,14 +160,14 @@ class TestSQLGenerator:
         assert "ALTER COLUMN `email`" in sql
         assert "UNSET TAGS ('pii')" in sql
 
-    def test_set_certification(self, sql_gen: SQLGenerator) -> None:
-        """Test setting certification status."""
-        sql = sql_gen.set_certification("main.default.test", "certified")
+    def test_certification_via_tag(self, sql_gen: SQLGenerator) -> None:
+        """Test certification is handled via standard tag methods."""
+        # Certification is set using regular set_table_tag
+        sql = sql_gen.set_table_tag("main.default.test", "system.certification_status", "certified")
         assert "SET TAGS ('system.certification_status' = 'certified')" in sql
 
-    def test_clear_certification(self, sql_gen: SQLGenerator) -> None:
-        """Test clearing certification status."""
-        sql = sql_gen.clear_certification("main.default.test")
+        # Certification is cleared using regular remove_table_tag
+        sql = sql_gen.remove_table_tag("main.default.test", "system.certification_status")
         assert "UNSET TAGS ('system.certification_status')" in sql
 
     def test_escape_special_characters(self, sql_gen: SQLGenerator) -> None:

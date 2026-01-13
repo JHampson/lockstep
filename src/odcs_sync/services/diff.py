@@ -13,7 +13,7 @@ from odcs_sync.models.catalog_state import (
     SyncAction,
     SyncPlan,
 )
-from odcs_sync.models.contract import CertificationStatus, Contract
+from odcs_sync.models.contract import Contract
 from odcs_sync.services.sql_generator import SQLGenerator
 
 logger = logging.getLogger(__name__)
@@ -21,9 +21,6 @@ logger = logging.getLogger(__name__)
 
 class DiffService:
     """Service for computing differences between contracts and catalog state."""
-
-    # System tag for certification
-    CERTIFICATION_TAG = "system.certification_status"
 
     def __init__(self) -> None:
         """Initialize the diff service."""
@@ -66,9 +63,6 @@ class DiffService:
             self._plan_description_changes(plan, contract, current_state, full_table_name)
             self._plan_constraint_changes(plan, contract, current_state, full_table_name)
             self._plan_tag_changes(plan, contract, current_state, full_table_name)
-
-        # Certification is handled via tags
-        self._plan_certification_changes(plan, contract, current_state, full_table_name)
 
         return plan
 
@@ -282,14 +276,13 @@ class DiffService:
         current: CatalogTable,
         full_table_name: str,
     ) -> None:
-        """Plan tag additions, updates, and removals."""
+        """Plan tag additions, updates, and removals.
+
+        Note: Unity Catalog certification is handled via the 'system.certification_status' tag.
+        """
         # Table-level tags
         contract_tags = dict(contract.tags)
         current_tags = dict(current.tags)
-
-        # Don't include certification tag in regular tag processing
-        contract_tags.pop(self.CERTIFICATION_TAG, None)
-        current_tags.pop(self.CERTIFICATION_TAG, None)
 
         # Add or update tags
         for tag_name, tag_value in contract_tags.items():
@@ -393,45 +386,3 @@ class DiffService:
                             details={"column": col.name, "tag": tag_name},
                         )
                     )
-
-    def _plan_certification_changes(
-        self,
-        plan: SyncPlan,
-        contract: Contract,
-        current: CatalogTable | None,
-        full_table_name: str,
-    ) -> None:
-        """Plan certification status changes."""
-        contract_cert = contract.certification
-        current_cert = current.certification_status if current else None
-
-        # Map contract certification to Unity Catalog values
-        cert_value_map = {
-            CertificationStatus.CERTIFIED: "certified",
-            CertificationStatus.DEPRECATED: "deprecated",
-            CertificationStatus.NOT_CERTIFIED: None,
-        }
-        desired_cert = cert_value_map.get(contract_cert)
-
-        if desired_cert != current_cert:
-            if desired_cert:
-                sql = self.sql_gen.set_certification(full_table_name, desired_cert)
-                plan.actions.append(
-                    SyncAction(
-                        action_type=ActionType.SET_CERTIFICATION,
-                        target=full_table_name,
-                        description=f"Set certification status to {desired_cert}",
-                        sql=sql,
-                        details={"status": desired_cert},
-                    )
-                )
-            elif current_cert:
-                sql = self.sql_gen.clear_certification(full_table_name)
-                plan.actions.append(
-                    SyncAction(
-                        action_type=ActionType.CLEAR_CERTIFICATION,
-                        target=full_table_name,
-                        description=f"Clear certification status (was {current_cert})",
-                        sql=sql,
-                    )
-                )

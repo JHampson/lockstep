@@ -8,7 +8,6 @@ import pytest
 from pydantic import ValidationError
 
 from odcs_sync.models.contract import (
-    CertificationStatus,
     Column,
     Contract,
     ContractSchema,
@@ -130,8 +129,8 @@ class TestContract:
         contract = Contract.model_validate(data)
         assert contract.name == "test_contract"
         assert contract.status == ContractStatus.DRAFT
-        assert contract.certification == CertificationStatus.NOT_CERTIFIED
         assert contract.columns == []
+        assert contract.tags == {}
 
     def test_full_contract(self, sample_contract_data: dict[str, Any]) -> None:
         """Test contract with all fields populated."""
@@ -141,8 +140,9 @@ class TestContract:
         assert contract.status == ContractStatus.ACTIVE
         assert contract.description == "Customer data contract"
         assert len(contract.columns) == 4
-        assert contract.tags == {"domain": "sales", "team": "customer-success"}
-        assert contract.certification == CertificationStatus.CERTIFIED
+        # Certification is now handled via tags
+        assert contract.tags["system.certification_status"] == "certified"
+        assert contract.tags["domain"] == "sales"
 
     def test_primary_key_columns(self, sample_contract_data: dict[str, Any]) -> None:
         """Test primary key column extraction."""

@@ -19,9 +19,6 @@ logger = logging.getLogger(__name__)
 class IntrospectionService:
     """Service for introspecting Unity Catalog metadata."""
 
-    # System tag for certification status
-    CERTIFICATION_TAG = "system.certification_status"
-
     def __init__(self, connector: DatabricksConnector) -> None:
         """Initialize the introspection service.
 
@@ -85,18 +82,14 @@ class IntrospectionService:
             if col.name in column_tags:
                 col.tags = column_tags[col.name]
 
-        # Extract certification status from tags
-        certification = table_tags.pop(self.CERTIFICATION_TAG, None)
-
         return CatalogTable(
             catalog=catalog,
             schema_name=schema,
             table_name=table,
             columns=columns,
             description=table_info.get("comment"),
-            tags=table_tags,
+            tags=table_tags,  # Includes system.certification_status if present
             constraints=constraints,
-            certification_status=certification,
         )
 
     def _parse_table_name(self, full_name: str) -> tuple[str, str, str]:

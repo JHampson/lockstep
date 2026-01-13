@@ -7,7 +7,7 @@ A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https:/
 - **Table Management**: Create tables, add columns, update descriptions
 - **Constraint Handling**: Set primary key and NOT NULL constraints (informational)
 - **Tag Synchronization**: Create, update, and remove tags on tables and columns
-- **Certification**: Manage Unity Catalog certification status (`certified`, `deprecated`)
+- **Certification**: Manage Unity Catalog certification via `system.certification_status` tag
 - **Idempotent Operations**: Safe to run multiple times - only applies necessary changes
 - **Dry Run Mode**: Preview changes before applying them
 - **Rich CLI Output**: Beautiful, informative terminal output
@@ -213,8 +213,8 @@ tags:
   domain: "sales"
   team: "customer-success"
   data_product: "customer-360"
-
-certification: certified
+  # Unity Catalog certification is set via the system.certification_status tag
+  system.certification_status: "certified"  # or "deprecated"
 ```
 
 ### 2. Validate the Contract

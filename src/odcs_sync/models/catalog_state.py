@@ -29,8 +29,6 @@ class ActionType(str, Enum):
     DROP_PRIMARY_KEY = "drop_primary_key"
     ADD_NOT_NULL = "add_not_null"
     DROP_NOT_NULL = "drop_not_null"
-    SET_CERTIFICATION = "set_certification"
-    CLEAR_CERTIFICATION = "clear_certification"
 
 
 @dataclass
@@ -64,7 +62,6 @@ class CatalogTable:
     description: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
     constraints: list[CatalogConstraint] = field(default_factory=list)
-    certification_status: str | None = None  # 'certified', 'deprecated', or None
 
     @property
     def full_name(self) -> str:

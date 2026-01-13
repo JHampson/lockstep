@@ -233,7 +233,7 @@ def sync_from_file(
     - Update descriptions for tables and columns
     - Manage tags (add, update, remove)
     - Set primary key and not null constraints
-    - Manage certification status
+    - Manage certification via 'system.certification_status' tag
 
     Examples:
 

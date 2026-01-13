@@ -10,7 +10,7 @@ from odcs_sync.models.catalog_state import (
     CatalogConstraint,
     CatalogTable,
 )
-from odcs_sync.models.contract import CertificationStatus, Contract
+from odcs_sync.models.contract import Contract
 from odcs_sync.services.diff import DiffService
 
 
@@ -74,7 +74,11 @@ class TestDiffService:
                 ),
             ],
             description="Customer data contract",
-            tags={"domain": "sales", "team": "customer-success"},
+            tags={
+                "domain": "sales",
+                "team": "customer-success",
+                "system.certification_status": "certified",
+            },
             constraints=[
                 CatalogConstraint(
                     name="pk_customers",
@@ -82,7 +86,6 @@ class TestDiffService:
                     columns=["customer_id"],
                 )
             ],
-            certification_status="certified",
         )
 
         plan = diff_service.compute_diff(sample_contract, catalog_state)
@@ -100,6 +103,7 @@ class TestDiffService:
                 CatalogColumn(name="email", data_type="STRING", nullable=False),
             ],
             description="Customer data contract",
+            tags={"system.certification_status": "certified"},
             constraints=[
                 CatalogConstraint(
                     name="pk",
@@ -107,7 +111,6 @@ class TestDiffService:
                     columns=["customer_id"],
                 )
             ],
-            certification_status="certified",
         )
 
         plan = diff_service.compute_diff(sample_contract, catalog_state)
@@ -193,54 +196,60 @@ class TestDiffService:
             for a in add_col_tag_actions
         )
 
-    def test_diff_certification(self, diff_service: DiffService) -> None:
-        """Test diff detects certification changes."""
+    def test_diff_certification_via_tag(self, diff_service: DiffService) -> None:
+        """Test diff detects certification changes via system tag."""
         from odcs_sync.models.contract import ContractSchema, TableInfo
 
-        # Contract wants certified
+        # Contract wants certified (via tag)
         contract = Contract(
             name="test",
             table_info=TableInfo(catalog="main", schema="default", table="test"),
             schema_def=ContractSchema(columns=[]),
-            certification=CertificationStatus.CERTIFIED,
+            tags={"system.certification_status": "certified"},
         )
 
-        # Catalog is not certified
+        # Catalog is not certified (no tag)
         catalog_state = CatalogTable(
             catalog="main",
             schema_name="default",
             table_name="test",
-            certification_status=None,
+            tags={},
         )
 
         plan = diff_service.compute_diff(contract, catalog_state)
-        cert_actions = [a for a in plan.actions if a.action_type == ActionType.SET_CERTIFICATION]
+        tag_actions = [a for a in plan.actions if a.action_type == ActionType.ADD_TABLE_TAG]
+        cert_actions = [
+            a for a in tag_actions if a.details.get("tag") == "system.certification_status"
+        ]
         assert len(cert_actions) == 1
-        assert cert_actions[0].details.get("status") == "certified"
+        assert cert_actions[0].details.get("value") == "certified"
 
-    def test_diff_clear_certification(self, diff_service: DiffService) -> None:
-        """Test diff detects certification removal."""
+    def test_diff_clear_certification_via_tag(self, diff_service: DiffService) -> None:
+        """Test diff detects certification removal via tag."""
         from odcs_sync.models.contract import ContractSchema, TableInfo
 
-        # Contract wants not certified
+        # Contract wants no certification (no tag)
         contract = Contract(
             name="test",
             table_info=TableInfo(catalog="main", schema="default", table="test"),
             schema_def=ContractSchema(columns=[]),
-            certification=CertificationStatus.NOT_CERTIFIED,
+            tags={},
         )
 
-        # Catalog is certified
+        # Catalog is certified (has tag)
         catalog_state = CatalogTable(
             catalog="main",
             schema_name="default",
             table_name="test",
-            certification_status="certified",
+            tags={"system.certification_status": "certified"},
         )
 
         plan = diff_service.compute_diff(contract, catalog_state)
-        clear_actions = [a for a in plan.actions if a.action_type == ActionType.CLEAR_CERTIFICATION]
-        assert len(clear_actions) == 1
+        remove_actions = [a for a in plan.actions if a.action_type == ActionType.REMOVE_TABLE_TAG]
+        cert_actions = [
+            a for a in remove_actions if a.details.get("tag") == "system.certification_status"
+        ]
+        assert len(cert_actions) == 1
 
     def test_diff_with_overrides(
         self, diff_service: DiffService, sample_contract: Contract

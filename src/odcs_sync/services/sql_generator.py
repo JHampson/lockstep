@@ -14,9 +14,6 @@ if TYPE_CHECKING:
 class SQLGenerator:
     """Generates SQL statements for Unity Catalog operations."""
 
-    # System tag for certification
-    CERTIFICATION_TAG = "system.certification_status"
-
     def _escape_identifier(self, identifier: str) -> str:
         """Escape an identifier for use in SQL.
 
@@ -195,19 +192,3 @@ class SQLGenerator:
             f"ALTER COLUMN {self._escape_identifier(column_name)} "
             f"UNSET TAGS ('{self._escape_string(tag_name)}')"
         )
-
-    def set_certification(self, full_table_name: str, status: str) -> str:
-        """Generate SQL to set certification status via system tag.
-
-        Args:
-            full_table_name: Fully qualified table name.
-            status: Certification status ('certified' or 'deprecated').
-
-        Returns:
-            SQL statement to set certification.
-        """
-        return self.set_table_tag(full_table_name, self.CERTIFICATION_TAG, status)
-
-    def clear_certification(self, full_table_name: str) -> str:
-        """Generate SQL to clear certification status."""
-        return self.remove_table_tag(full_table_name, self.CERTIFICATION_TAG)

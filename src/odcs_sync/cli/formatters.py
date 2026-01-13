@@ -36,8 +36,6 @@ ACTION_STYLES = {
     "drop_primary_key": ("🔑", "red"),
     "add_not_null": ("❗", "green"),
     "drop_not_null": ("❗", "red"),
-    "set_certification": ("✅", "green"),
-    "clear_certification": ("⚪", "yellow"),
 }
 
 

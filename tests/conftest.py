@@ -58,8 +58,11 @@ def sample_contract_data() -> dict[str, Any]:
                 },
             ]
         },
-        "tags": {"domain": "sales", "team": "customer-success"},
-        "certification": "certified",
+        "tags": {
+            "domain": "sales",
+            "team": "customer-success",
+            "system.certification_status": "certified",
+        },
     }
 
 
@@ -98,7 +101,11 @@ def sample_catalog_table() -> CatalogTable:
             ),
         ],
         description="Customer data",  # Different from contract
-        tags={"domain": "sales", "legacy": "true"},  # Has extra tag, missing team
+        tags={
+            "domain": "sales",
+            "legacy": "true",  # Has extra tag, missing team
+            "system.certification_status": "certified",
+        },
         constraints=[
             CatalogConstraint(
                 name="pk_customers",
@@ -106,7 +113,6 @@ def sample_catalog_table() -> CatalogTable:
                 columns=["customer_id"],
             )
         ],
-        certification_status="certified",
     )
 
 
