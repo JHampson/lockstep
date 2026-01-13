@@ -64,6 +64,10 @@ def _get_databricks_config(
     client_secret: str | None = None,
 ) -> DatabricksConfig:
     """Build Databricks configuration from CLI options and environment."""
+    # If token is explicitly provided, disable OAuth (user wants token auth)
+    if token:
+        use_oauth = False
+
     return DatabricksConfig(
         host=host or "",
         http_path=http_path or "",

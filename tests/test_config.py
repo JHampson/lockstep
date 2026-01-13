@@ -6,8 +6,6 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from odcs_sync.databricks.config import DatabricksConfig, _load_config_file
 
 
@@ -183,3 +181,62 @@ class TestLoadConfigFile:
             result = _load_config_file()
             assert result == {}
 
+    def test_loads_toml_config_file(self, tmp_path: Path) -> None:
+        """Test that TOML config file is loaded."""
+        config_file = tmp_path / ".odcs_sync.toml"
+        config_file.write_text(
+            'host = "https://toml-test.databricks.com"\n'
+            'http_path = "/sql/toml"\n'
+            'timeout_seconds = 600\n'
+        )
+
+        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+            result = _load_config_file()
+            assert result["host"] == "https://toml-test.databricks.com"
+            assert result["http_path"] == "/sql/toml"
+            assert result["timeout_seconds"] == 600
+
+    def test_yaml_takes_precedence_over_toml(self, tmp_path: Path) -> None:
+        """Test that .yaml file takes precedence over .toml."""
+        yaml_file = tmp_path / ".odcs_sync.yaml"
+        yaml_file.write_text("host: https://yaml-first.databricks.com")
+        toml_file = tmp_path / ".odcs_sync.toml"
+        toml_file.write_text('host = "https://toml-second.databricks.com"')
+
+        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+            result = _load_config_file()
+            assert result["host"] == "https://yaml-first.databricks.com"
+
+    def test_toml_config_with_service_principal(self, tmp_path: Path) -> None:
+        """Test that TOML config loads service principal credentials."""
+        config_file = tmp_path / ".odcs_sync.toml"
+        config_file.write_text(
+            'host = "https://toml-sp.databricks.com"\n'
+            'http_path = "/sql/test"\n'
+            'client_id = "my-client-id"\n'
+            'client_secret = "my-client-secret"\n'
+        )
+
+        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+            result = _load_config_file()
+            assert result["host"] == "https://toml-sp.databricks.com"
+            assert result["client_id"] == "my-client-id"
+            assert result["client_secret"] == "my-client-secret"
+
+    def test_toml_config_integrates_with_databricks_config(self, tmp_path: Path) -> None:
+        """Test that TOML config integrates with DatabricksConfig model."""
+        config_file = tmp_path / ".odcs_sync.toml"
+        config_file.write_text(
+            'host = "https://toml-integration.databricks.com"\n'
+            'http_path = "/sql/integration"\n'
+            'use_oauth = false\n'
+            'token = "toml-token"\n'
+        )
+
+        with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
+            config = DatabricksConfig()
+            assert config.host == "https://toml-integration.databricks.com"
+            assert config.http_path == "/sql/integration"
+            assert config.use_oauth is False
+            assert config.token == "toml-token"
+            assert config.get_auth_type() == "token"
