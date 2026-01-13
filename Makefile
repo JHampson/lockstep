@@ -1,7 +1,10 @@
-.PHONY: all test lint format typecheck clean install dev-install help
+.PHONY: all check test lint format typecheck clean install dev-install help
 
 # Default target
-all: lint typecheck test
+all: check
+
+# Run all checks: format, lint, typecheck, and tests
+check: format lint typecheck test
 
 # Install dependencies
 install:
@@ -60,7 +63,8 @@ build: clean
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  all          - Run lint, typecheck, and test"
+	@echo "  all          - Run all checks (alias for 'check')"
+	@echo "  check        - Run format, lint, typecheck, and test"
 	@echo "  install      - Install package"
 	@echo "  dev-install  - Install package with dev dependencies"
 	@echo "  test         - Run tests"
