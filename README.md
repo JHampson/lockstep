@@ -12,7 +12,70 @@ A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https:/
 - **Dry Run Mode**: Preview changes before applying them
 - **Rich CLI Output**: Beautiful, informative terminal output
 
+## Installation
 
+### Using UV Tool (Recommended)
+
+Install as a global CLI tool with an isolated environment:
+
+```bash
+# From local directory
+uv tool install --python python3.11 /path/to/contract_sync
+
+# From git repository
+uv tool install --python python3.11 git+https://github.com/your-org/odcs-sync.git
+
+# Upgrade to latest version
+uv tool upgrade odcs-sync
+
+# Uninstall
+uv tool uninstall odcs-sync
+```
+
+The tool installs to:
+- **Isolated environment**: `~/.local/share/uv/tools/odcs-sync/`
+- **Executable symlink**: `~/.local/bin/odcs-sync`
+
+> **Note:** Ensure `~/.local/bin` is in your `$PATH`
+
+### Using pip
+
+```bash
+# Clone and install
+git clone https://github.com/your-org/odcs-sync.git
+cd odcs-sync
+pip install .
+
+# Or install in development mode
+pip install -e ".[dev]"
+```
+
+### Running with UV (without installation)
+
+Run directly from source without installing:
+
+```bash
+cd /path/to/contract_sync
+uv run odcs-sync --help
+uv run odcs-sync from-file contracts/ --dry-run
+```
+
+### Building Standalone Executable
+
+Build a standalone executable (~34MB) that doesn't require Python:
+
+```bash
+# Install PyInstaller
+uv pip install pyinstaller
+
+# Build the executable
+uv run pyinstaller --onefile --name odcs-sync --clean src/odcs_sync/cli/main.py
+
+# Run it
+./dist/odcs-sync --version
+```
+
+> **Note:** PyInstaller builds are platform-specific. Build on macOS for macOS, Linux for Linux, etc.
 
 ## Authentication
 
@@ -458,53 +521,6 @@ make lint      # Run linting
 make format    # Format code
 make typecheck # Run mypy
 make all       # Run all checks
-```
-
-### Building Standalone Executable
-
-Build a standalone executable that doesn't require Python to be installed:
-
-```bash
-# Install PyInstaller
-uv pip install pyinstaller
-
-# Build the executable
-uv run pyinstaller --onefile --name odcs-sync --clean src/odcs_sync/cli/main.py
-
-# The executable will be in dist/odcs-sync
-./dist/odcs-sync --version
-```
-
-The resulting executable (~34MB) includes all dependencies and can be distributed without requiring Python.
-
-**Build for different platforms:**
-
-```bash
-# macOS (ARM)
-pyinstaller --onefile --name odcs-sync-macos-arm64 src/odcs_sync/cli/main.py
-
-# macOS (Intel)
-pyinstaller --onefile --name odcs-sync-macos-x64 src/odcs_sync/cli/main.py
-
-# Linux (build on Linux)
-pyinstaller --onefile --name odcs-sync-linux src/odcs_sync/cli/main.py
-
-# Windows (build on Windows)
-pyinstaller --onefile --name odcs-sync.exe src/odcs_sync/cli/main.py
-```
-
-> **Note:** PyInstaller builds are platform-specific. To build for a different platform, you need to run PyInstaller on that platform.
-
-### Running with UV (without installation)
-
-You can run the tool directly using `uv` without building an executable:
-
-```bash
-# Run directly from source
-uv run odcs-sync --help
-
-# Run with specific Python version
-uv run --python 3.12 odcs-sync from-file contracts/ --dry-run
 ```
 
 ## Architecture
