@@ -176,17 +176,16 @@ class TestActionStyles:
 
     def test_all_action_types_have_styles(self) -> None:
         """Test that all action types have defined styles."""
-        for action_type in ActionType:
+        for _action_type in ActionType:
             # Not all action types need styles (some might be new)
             # Just verify the dict is accessible
             pass
 
     def test_style_format(self) -> None:
         """Test that styles are tuples of (icon, color)."""
-        for action_type, style in ACTION_STYLES.items():
+        for _action_type, style in ACTION_STYLES.items():
             assert isinstance(style, tuple)
             assert len(style) == 2
             icon, color = style
             assert isinstance(icon, str)
             assert isinstance(color, str)
-

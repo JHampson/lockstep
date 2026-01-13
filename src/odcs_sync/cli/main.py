@@ -124,9 +124,10 @@ def sync_from_file(
     http_path: Annotated[
         str | None,
         typer.Option(
-            "--http-path",
+            "--sql-endpoint",
+            "--http-path",  # Backward compatibility alias
             envvar="DATABRICKS_HTTP_PATH",
-            help="HTTP path for SQL warehouse.",
+            help="SQL warehouse endpoint path (e.g., /sql/1.0/warehouses/abc123).",
         ),
     ] = None,
     token: Annotated[

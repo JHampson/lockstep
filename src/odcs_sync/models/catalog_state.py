@@ -102,19 +102,23 @@ class SyncAction:
 
 
 # Action types that are considered destructive (data loss or breaking changes)
-DESTRUCTIVE_ACTION_TYPES: frozenset[ActionType] = frozenset({
-    ActionType.DROP_COLUMN,
-    ActionType.REMOVE_TABLE_TAG,
-    ActionType.REMOVE_COLUMN_TAG,
-    ActionType.DROP_PRIMARY_KEY,
-    ActionType.DROP_NOT_NULL,
-})
+DESTRUCTIVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.DROP_COLUMN,
+        ActionType.REMOVE_TABLE_TAG,
+        ActionType.REMOVE_COLUMN_TAG,
+        ActionType.DROP_PRIMARY_KEY,
+        ActionType.DROP_NOT_NULL,
+    }
+)
 
 # Action types for tag removal (subset of destructive)
-TAG_REMOVAL_ACTION_TYPES: frozenset[ActionType] = frozenset({
-    ActionType.REMOVE_TABLE_TAG,
-    ActionType.REMOVE_COLUMN_TAG,
-})
+TAG_REMOVAL_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.REMOVE_TABLE_TAG,
+        ActionType.REMOVE_COLUMN_TAG,
+    }
+)
 
 
 @dataclass

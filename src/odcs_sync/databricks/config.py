@@ -63,7 +63,7 @@ class DatabricksConfig(BaseSettings):
     )
     http_path: str = Field(
         default="",
-        description="HTTP path for SQL warehouse (e.g., /sql/1.0/warehouses/xxx)",
+        description="SQL warehouse endpoint path (e.g., /sql/1.0/warehouses/xxx)",
     )
 
     # Authentication - prefer OAuth, fallback to PAT

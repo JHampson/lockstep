@@ -92,7 +92,7 @@ databricks auth login --host https://your-workspace.databricks.com
 # Then run the tool
 odcs-sync from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
-  --http-path "/sql/1.0/warehouses/xxx" \
+  --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --oauth
 ```
 
@@ -103,7 +103,7 @@ Works on both AWS and Azure Databricks:
 ```bash
 odcs-sync from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
-  --http-path "/sql/1.0/warehouses/xxx" \
+  --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --client-id "your-client-id" \
   --client-secret "your-client-secret"
 ```
@@ -124,7 +124,7 @@ odcs-sync from-file contracts/
 ```bash
 odcs-sync from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
-  --http-path "/sql/1.0/warehouses/xxx" \
+  --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --no-oauth \
   --token "your-personal-access-token"
 ```
@@ -228,7 +228,7 @@ odcs-sync validate contracts/customers.yaml
 ```bash
 odcs-sync from-file contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
-  --http-path "/sql/1.0/warehouses/xxx" \
+  --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --dry-run
 ```
 
@@ -237,7 +237,7 @@ odcs-sync from-file contracts/customers.yaml \
 ```bash
 odcs-sync from-file contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
-  --http-path "/sql/1.0/warehouses/xxx"
+  --sql-endpoint "/sql/1.0/warehouses/xxx"
 ```
 
 ## CLI Reference
@@ -255,7 +255,7 @@ odcs-sync from-file PATH [OPTIONS]
 
 **Connection Options:**
 - `--host TEXT`: Databricks workspace host URL
-- `--http-path TEXT`: HTTP path for SQL warehouse
+- `--sql-endpoint TEXT`: SQL warehouse endpoint path (e.g., `/sql/1.0/warehouses/xxx`)
 
 **Authentication Options:**
 - `--oauth/--no-oauth`: Use OAuth authentication (default: enabled)
@@ -279,12 +279,12 @@ odcs-sync from-file PATH [OPTIONS]
 
 ```bash
 # Sync with OAuth (interactive)
-odcs-sync from-file contracts/ --host "https://..." --http-path "/sql/..." --oauth --dry-run
+odcs-sync from-file contracts/ --host "https://..." --sql-endpoint "/sql/..." --oauth --dry-run
 
 # Sync with Service Principal (CI/CD)
 odcs-sync from-file contracts/ \
   --host "https://your-workspace.databricks.com" \
-  --http-path "/sql/1.0/warehouses/xxx" \
+  --sql-endpoint "/sql/1.0/warehouses/xxx" \
   --client-id "your-client-id" \
   --client-secret "your-client-secret"
 
@@ -435,7 +435,7 @@ Use `--dry-run` to detect drift between contracts and Unity Catalog:
 #!/bin/bash
 odcs-sync from-file contracts/ \
   --host "$DATABRICKS_HOST" \
-  --http-path "$DATABRICKS_HTTP_PATH" \
+  --sql-endpoint "$DATABRICKS_HTTP_PATH" \
   --client-id "$DATABRICKS_CLIENT_ID" \
   --client-secret "$DATABRICKS_CLIENT_SECRET" \
   --dry-run
@@ -579,7 +579,7 @@ jobs:
 
 Add these secrets in your repository settings (Settings → Secrets and variables → Actions):
 - `DATABRICKS_HOST` - Your Databricks workspace URL
-- `DATABRICKS_HTTP_PATH` - SQL warehouse HTTP path
+- `DATABRICKS_HTTP_PATH` - SQL warehouse endpoint path
 - `DATABRICKS_CLIENT_ID` - Service principal client ID
 - `DATABRICKS_CLIENT_SECRET` - Service principal secret
 
@@ -698,7 +698,7 @@ stages:
 
 Create a variable group named `databricks-credentials` in Azure DevOps with:
 - `DATABRICKS_HOST` - Your Databricks workspace URL
-- `DATABRICKS_HTTP_PATH` - SQL warehouse HTTP path
+- `DATABRICKS_HTTP_PATH` - SQL warehouse endpoint path
 - `DATABRICKS_CLIENT_ID` - Service principal client ID
 - `DATABRICKS_CLIENT_SECRET` - Service principal secret (mark as secret)
 

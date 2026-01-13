@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from odcs_sync.models.catalog_state import CatalogColumn, CatalogConstraint, CatalogTable
+from odcs_sync.models.catalog_state import CatalogTable
 from odcs_sync.services.introspection import IntrospectionService
 
 
@@ -30,9 +30,9 @@ class TestIntrospectionService:
     ) -> None:
         """Test table_exists returns True when table exists."""
         mock_connector.fetchone.return_value = {"1": 1}
-        
+
         result = introspection_service.table_exists("catalog.schema.table")
-        
+
         assert result is True
         mock_connector.fetchone.assert_called_once()
 
@@ -41,9 +41,9 @@ class TestIntrospectionService:
     ) -> None:
         """Test table_exists returns False when table doesn't exist."""
         mock_connector.fetchone.return_value = None
-        
+
         result = introspection_service.table_exists("catalog.schema.table")
-        
+
         assert result is False
 
     def test_get_table_returns_none_when_not_exists(
@@ -51,9 +51,9 @@ class TestIntrospectionService:
     ) -> None:
         """Test get_table returns None when table doesn't exist."""
         mock_connector.fetchone.return_value = None
-        
+
         result = introspection_service.get_table("catalog.schema.table")
-        
+
         assert result is None
 
     def test_get_table_returns_catalog_table(
@@ -65,7 +65,7 @@ class TestIntrospectionService:
             {"1": 1},  # table_exists check
             {"table_name": "table", "comment": "Test table description"},  # _get_table_info
         ]
-        
+
         # Mock columns
         mock_connector.fetchall.side_effect = [
             # _get_columns
@@ -92,9 +92,9 @@ class TestIntrospectionService:
             # _get_table_tags_from_information_schema (fallback)
             [],
         ]
-        
+
         result = introspection_service.get_table("catalog.schema.table")
-        
+
         assert result is not None
         assert isinstance(result, CatalogTable)
         assert result.catalog == "catalog"
@@ -107,9 +107,7 @@ class TestIntrospectionService:
         assert result.columns[1].name == "name"
         assert result.columns[1].nullable is True
 
-    def test_parse_table_name_valid(
-        self, introspection_service: IntrospectionService
-    ) -> None:
+    def test_parse_table_name_valid(self, introspection_service: IntrospectionService) -> None:
         """Test _parse_table_name with valid format."""
         catalog, schema, table = introspection_service._parse_table_name(
             "my_catalog.my_schema.my_table"
@@ -118,9 +116,7 @@ class TestIntrospectionService:
         assert schema == "my_schema"
         assert table == "my_table"
 
-    def test_parse_table_name_invalid(
-        self, introspection_service: IntrospectionService
-    ) -> None:
+    def test_parse_table_name_invalid(self, introspection_service: IntrospectionService) -> None:
         """Test _parse_table_name raises error for invalid format."""
         with pytest.raises(ValueError, match="Invalid table name"):
             introspection_service._parse_table_name("invalid_name")
@@ -150,9 +146,9 @@ class TestIntrospectionService:
                 "comment": None,
             },
         ]
-        
+
         columns = introspection_service._get_columns("catalog", "schema", "table")
-        
+
         assert len(columns) == 2
         assert columns[0].name == "col1"
         assert columns[0].data_type == "INT"
@@ -169,9 +165,9 @@ class TestIntrospectionService:
             {"constraint_name": "pk_test", "column_name": "id"},
             {"constraint_name": "pk_test", "column_name": "version"},
         ]
-        
+
         constraints = introspection_service._get_constraints("catalog", "schema", "table")
-        
+
         assert len(constraints) == 1
         assert constraints[0].name == "pk_test"
         assert constraints[0].constraint_type == "PRIMARY_KEY"
@@ -182,9 +178,9 @@ class TestIntrospectionService:
     ) -> None:
         """Test _get_constraints returns empty list when no PK."""
         mock_connector.fetchall.return_value = []
-        
+
         constraints = introspection_service._get_constraints("catalog", "schema", "table")
-        
+
         assert len(constraints) == 0
 
     def test_get_not_null_columns(
@@ -195,9 +191,9 @@ class TestIntrospectionService:
             {"column_name": "id"},
             {"column_name": "created_at"},
         ]
-        
+
         result = introspection_service.get_not_null_columns("catalog.schema.table")
-        
+
         assert result == {"id", "created_at"}
 
 
@@ -213,12 +209,12 @@ class TestTagFetching:
             {"column_name": "email", "tag_name": "classification", "tag_value": "sensitive"},
             {"column_name": "id", "tag_name": "pii", "tag_value": "false"},
         ]
-        
+
         column_tags: dict[str, dict[str, str]] = {}
         introspection_service._get_column_tags_from_information_schema(
             "catalog", "schema", "table", column_tags
         )
-        
+
         assert "email" in column_tags
         assert column_tags["email"]["pii"] == "true"
         assert column_tags["email"]["classification"] == "sensitive"
@@ -233,12 +229,12 @@ class TestTagFetching:
             {"tag_name": "domain", "tag_value": "sales"},
             {"tag_name": "team", "tag_value": "analytics"},
         ]
-        
+
         table_tags: dict[str, str] = {}
         introspection_service._get_table_tags_from_information_schema(
             "catalog", "schema", "table", table_tags
         )
-        
+
         assert table_tags["domain"] == "sales"
         assert table_tags["team"] == "analytics"
 
@@ -247,12 +243,11 @@ class TestTagFetching:
     ) -> None:
         """Test that tag fetching handles errors without raising."""
         mock_connector.fetchall.side_effect = Exception("Query failed")
-        
+
         column_tags: dict[str, dict[str, str]] = {}
         # Should not raise
         introspection_service._get_column_tags_from_information_schema(
             "catalog", "schema", "table", column_tags
         )
-        
-        assert column_tags == {}
 
+        assert column_tags == {}

@@ -187,7 +187,7 @@ class TestLoadConfigFile:
         config_file.write_text(
             'host = "https://toml-test.databricks.com"\n'
             'http_path = "/sql/toml"\n'
-            'timeout_seconds = 600\n'
+            "timeout_seconds = 600\n"
         )
 
         with patch("odcs_sync.databricks.config.Path.home", return_value=tmp_path):
@@ -229,7 +229,7 @@ class TestLoadConfigFile:
         config_file.write_text(
             'host = "https://toml-integration.databricks.com"\n'
             'http_path = "/sql/integration"\n'
-            'use_oauth = false\n'
+            "use_oauth = false\n"
             'token = "toml-token"\n'
         )
 

@@ -105,22 +105,23 @@ class TestSyncService:
     ) -> None:
         """Test syncing a contract when table doesn't exist."""
         # Mock introspection to return None (table doesn't exist)
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=SyncPlan(
-                contract_name="test_contract",
-                table_name="catalog.schema.table",
-                actions=[
-                    SyncAction(
-                        action_type=ActionType.CREATE_TABLE,
-                        target="catalog.schema.table",
-                        description="Create table",
-                        sql="CREATE TABLE catalog.schema.table ...",
-                    )
-                ],
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=SyncPlan(
+                    contract_name="test_contract",
+                    table_name="catalog.schema.table",
+                    actions=[
+                        SyncAction(
+                            action_type=ActionType.CREATE_TABLE,
+                            target="catalog.schema.table",
+                            description="Create table",
+                            sql="CREATE TABLE catalog.schema.table ...",
+                        )
+                    ],
+                ),
             ),
         ):
             result = sync_service.sync_contract(sample_contract)
@@ -136,22 +137,23 @@ class TestSyncService:
         sample_contract: Contract,
     ) -> None:
         """Test dry run doesn't execute SQL."""
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=SyncPlan(
-                contract_name="test_contract",
-                table_name="catalog.schema.table",
-                actions=[
-                    SyncAction(
-                        action_type=ActionType.CREATE_TABLE,
-                        target="catalog.schema.table",
-                        description="Create table",
-                        sql="CREATE TABLE ...",
-                    )
-                ],
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=SyncPlan(
+                    contract_name="test_contract",
+                    table_name="catalog.schema.table",
+                    actions=[
+                        SyncAction(
+                            action_type=ActionType.CREATE_TABLE,
+                            target="catalog.schema.table",
+                            description="Create table",
+                            sql="CREATE TABLE ...",
+                        )
+                    ],
+                ),
             ),
         ):
             options = SyncOptions(dry_run=True)
@@ -169,21 +171,24 @@ class TestSyncService:
         sample_contract: Contract,
     ) -> None:
         """Test syncing when no changes are needed."""
-        with patch.object(
-            sync_service.introspection,
-            "get_table",
-            return_value=CatalogTable(
-                catalog="catalog",
-                schema_name="schema",
-                table_name="table",
+        with (
+            patch.object(
+                sync_service.introspection,
+                "get_table",
+                return_value=CatalogTable(
+                    catalog="catalog",
+                    schema_name="schema",
+                    table_name="table",
+                ),
             ),
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=SyncPlan(
-                contract_name="test_contract",
-                table_name="catalog.schema.table",
-                actions=[],
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=SyncPlan(
+                    contract_name="test_contract",
+                    table_name="catalog.schema.table",
+                    actions=[],
+                ),
             ),
         ):
             result = sync_service.sync_contract(sample_contract)
@@ -195,7 +200,7 @@ class TestSyncService:
     def test_sync_contract_filters_destructive(
         self,
         sync_service: SyncService,
-        mock_connector: MagicMock,
+        mock_connector: MagicMock,  # noqa: ARG002
         sample_contract: Contract,
     ) -> None:
         """Test that destructive actions are filtered by default."""
@@ -218,12 +223,13 @@ class TestSyncService:
             ],
         )
 
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=plan_with_destructive,
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=plan_with_destructive,
+            ),
         ):
             # Default options - destructive not allowed
             result = sync_service.sync_contract(sample_contract)
@@ -234,7 +240,7 @@ class TestSyncService:
     def test_sync_contract_allows_destructive(
         self,
         sync_service: SyncService,
-        mock_connector: MagicMock,
+        mock_connector: MagicMock,  # noqa: ARG002
         sample_contract: Contract,
     ) -> None:
         """Test that destructive actions are allowed when enabled."""
@@ -251,12 +257,13 @@ class TestSyncService:
             ],
         )
 
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=plan_with_destructive,
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=plan_with_destructive,
+            ),
         ):
             options = SyncOptions(allow_destructive=True)
             result = sync_service.sync_contract(sample_contract, options)
@@ -272,22 +279,23 @@ class TestSyncService:
         """Test that SQL errors are captured but don't stop sync."""
         mock_connector.execute.side_effect = Exception("SQL Error")
 
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=SyncPlan(
-                contract_name="test_contract",
-                table_name="catalog.schema.table",
-                actions=[
-                    SyncAction(
-                        action_type=ActionType.CREATE_TABLE,
-                        target="catalog.schema.table",
-                        description="Create table",
-                        sql="CREATE TABLE ...",
-                    )
-                ],
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=SyncPlan(
+                    contract_name="test_contract",
+                    table_name="catalog.schema.table",
+                    actions=[
+                        SyncAction(
+                            action_type=ActionType.CREATE_TABLE,
+                            target="catalog.schema.table",
+                            description="Create table",
+                            sql="CREATE TABLE ...",
+                        )
+                    ],
+                ),
             ),
         ):
             result = sync_service.sync_contract(sample_contract)
@@ -298,35 +306,32 @@ class TestSyncService:
     def test_sync_contracts_multiple(
         self,
         sync_service: SyncService,
-        mock_connector: MagicMock,
+        mock_connector: MagicMock,  # noqa: ARG002
     ) -> None:
         """Test syncing multiple contracts."""
         contracts = [
             Contract(
                 name="contract1",
                 table_info=TableInfo(catalog="cat", schema="sch", table="table1"),
-                schema_def=ContractSchema(
-                    columns=[Column(name="id", logicalType="string")]
-                ),
+                schema_def=ContractSchema(columns=[Column(name="id", logicalType="string")]),
             ),
             Contract(
                 name="contract2",
                 table_info=TableInfo(catalog="cat", schema="sch", table="table2"),
-                schema_def=ContractSchema(
-                    columns=[Column(name="id", logicalType="string")]
-                ),
+                schema_def=ContractSchema(columns=[Column(name="id", logicalType="string")]),
             ),
         ]
 
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ), patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=SyncPlan(
-                contract_name="test",
-                table_name="cat.sch.table",
-                actions=[],
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=SyncPlan(
+                    contract_name="test",
+                    table_name="cat.sch.table",
+                    actions=[],
+                ),
             ),
         ):
             results = sync_service.sync_contracts(contracts)
@@ -337,30 +342,30 @@ class TestSyncService:
     def test_sync_contract_with_overrides(
         self,
         sync_service: SyncService,
-        mock_connector: MagicMock,
+        mock_connector: MagicMock,  # noqa: ARG002
         sample_contract: Contract,
     ) -> None:
         """Test syncing with catalog/schema overrides."""
-        with patch.object(
-            sync_service.introspection, "get_table", return_value=None
-        ) as mock_get_table, patch.object(
-            sync_service.diff_service,
-            "compute_diff",
-            return_value=SyncPlan(
-                contract_name="test_contract",
-                table_name="override_cat.override_sch.table",
-                actions=[],
-            ),
-        ) as mock_diff:
+        with (
+            patch.object(sync_service.introspection, "get_table", return_value=None),
+            patch.object(
+                sync_service.diff_service,
+                "compute_diff",
+                return_value=SyncPlan(
+                    contract_name="test_contract",
+                    table_name="override_cat.override_sch.table",
+                    actions=[],
+                ),
+            ) as mock_diff,
+        ):
             options = SyncOptions(
                 catalog_override="override_cat",
                 schema_override="override_sch",
             )
-            result = sync_service.sync_contract(sample_contract, options)
+            sync_service.sync_contract(sample_contract, options)
 
             # Verify overrides were passed to diff
             mock_diff.assert_called_once()
             call_kwargs = mock_diff.call_args.kwargs
             assert call_kwargs["catalog_override"] == "override_cat"
             assert call_kwargs["schema_override"] == "override_sch"
-
