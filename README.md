@@ -460,19 +460,247 @@ esac
 ### GitHub Actions Example
 
 ```yaml
-- name: Check for contract drift
-  env:
-    DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
-    DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
-    DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
-    DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
-  run: |
-    odcs-sync from-file contracts/ --dry-run
-    if [ $? -eq 2 ]; then
-      echo "::warning::Contract drift detected"
-      exit 1
-    fi
+# .github/workflows/data-contracts.yml
+name: Data Contract Sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'contracts/**'
+  workflow_dispatch:  # Manual trigger
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  validate:
+    name: Validate Contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install odcs-sync
+        run: |
+          pip install uv
+          uv tool install odcs-sync
+          
+      - name: Validate contract syntax
+        run: |
+          odcs-sync validate contracts/
+
+  drift-check:
+    name: Check for Drift
+    needs: validate
+    runs-on: ubuntu-latest
+    outputs:
+      has_drift: ${{ steps.check.outputs.has_drift }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install odcs-sync
+        run: |
+          pip install uv
+          uv tool install odcs-sync
+          
+      - name: Check for contract drift
+        id: check
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: |
+          set +e
+          odcs-sync from-file contracts/ --dry-run
+          exit_code=$?
+          set -e
+          
+          if [ $exit_code -eq 0 ]; then
+            echo "✅ No drift detected"
+            echo "has_drift=false" >> $GITHUB_OUTPUT
+          elif [ $exit_code -eq 2 ]; then
+            echo "::warning::Contract drift detected - changes will be applied on merge"
+            echo "has_drift=true" >> $GITHUB_OUTPUT
+          else
+            echo "::error::Sync check failed"
+            exit 1
+          fi
+
+  apply:
+    name: Apply Changes
+    needs: drift-check
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production  # Requires approval if configured
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          
+      - name: Install odcs-sync
+        run: |
+          pip install uv
+          uv tool install odcs-sync
+          
+      - name: Apply contract changes
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: |
+          odcs-sync from-file contracts/
+          
+      - name: Summary
+        run: |
+          echo "### ✅ Data Contracts Applied" >> $GITHUB_STEP_SUMMARY
+          echo "Changes have been synchronized to Unity Catalog." >> $GITHUB_STEP_SUMMARY
 ```
+
+**Repository Secrets Setup:**
+
+Add these secrets in your repository settings (Settings → Secrets and variables → Actions):
+- `DATABRICKS_HOST` - Your Databricks workspace URL
+- `DATABRICKS_HTTP_PATH` - SQL warehouse HTTP path
+- `DATABRICKS_CLIENT_ID` - Service principal client ID
+- `DATABRICKS_CLIENT_SECRET` - Service principal secret
+
+**Environment Protection (Optional):**
+
+Create a `production` environment (Settings → Environments) with:
+- Required reviewers for deployment approval
+- Branch protection rules
+
+### Azure DevOps Pipelines Example
+
+```yaml
+# azure-pipelines.yml
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - contracts/*
+
+variables:
+  - group: databricks-credentials  # Variable group containing secrets
+
+stages:
+  - stage: ValidateContracts
+    displayName: 'Validate Data Contracts'
+    jobs:
+      - job: Validate
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.11'
+              
+          - script: |
+              pip install uv
+              uv tool install odcs-sync
+            displayName: 'Install odcs-sync'
+            
+          - script: |
+              odcs-sync validate contracts/
+            displayName: 'Validate contract syntax'
+
+  - stage: CheckDrift
+    displayName: 'Check for Drift'
+    dependsOn: ValidateContracts
+    jobs:
+      - job: DriftCheck
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: '3.11'
+              
+          - script: |
+              pip install uv
+              uv tool install odcs-sync
+            displayName: 'Install odcs-sync'
+            
+          - script: |
+              odcs-sync from-file contracts/ --dry-run
+              exit_code=$?
+              if [ $exit_code -eq 2 ]; then
+                echo "##vso[task.logissue type=warning]Contract drift detected"
+                exit 1
+              elif [ $exit_code -ne 0 ]; then
+                echo "##vso[task.logissue type=error]Sync check failed"
+                exit 1
+              fi
+              echo "##vso[task.complete result=Succeeded]No drift detected"
+            displayName: 'Check for contract drift'
+            env:
+              DATABRICKS_HOST: $(DATABRICKS_HOST)
+              DATABRICKS_HTTP_PATH: $(DATABRICKS_HTTP_PATH)
+              DATABRICKS_CLIENT_ID: $(DATABRICKS_CLIENT_ID)
+              DATABRICKS_CLIENT_SECRET: $(DATABRICKS_CLIENT_SECRET)
+
+  - stage: ApplyChanges
+    displayName: 'Apply Contract Changes'
+    dependsOn: CheckDrift
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: Deploy
+        pool:
+          vmImage: 'ubuntu-latest'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                
+                - task: UsePythonVersion@0
+                  inputs:
+                    versionSpec: '3.11'
+                    
+                - script: |
+                    pip install uv
+                    uv tool install odcs-sync
+                  displayName: 'Install odcs-sync'
+                  
+                - script: |
+                    odcs-sync from-file contracts/
+                  displayName: 'Apply contract changes'
+                  env:
+                    DATABRICKS_HOST: $(DATABRICKS_HOST)
+                    DATABRICKS_HTTP_PATH: $(DATABRICKS_HTTP_PATH)
+                    DATABRICKS_CLIENT_ID: $(DATABRICKS_CLIENT_ID)
+                    DATABRICKS_CLIENT_SECRET: $(DATABRICKS_CLIENT_SECRET)
+```
+
+**Variable Group Setup:**
+
+Create a variable group named `databricks-credentials` in Azure DevOps with:
+- `DATABRICKS_HOST` - Your Databricks workspace URL
+- `DATABRICKS_HTTP_PATH` - SQL warehouse HTTP path
+- `DATABRICKS_CLIENT_ID` - Service principal client ID
+- `DATABRICKS_CLIENT_SECRET` - Service principal secret (mark as secret)
 
 ## Development
 
