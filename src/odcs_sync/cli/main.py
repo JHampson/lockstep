@@ -277,9 +277,7 @@ def sync_from_file(
 
     # Build configuration
     try:
-        config = _get_databricks_config(
-            host, http_path, token, use_oauth, client_id, client_secret
-        )
+        config = _get_databricks_config(host, http_path, token, use_oauth, client_id, client_secret)
         if not config.is_configured():
             error_console.print(
                 "\n[red]❌ Databricks connection not configured.[/red]\n"
