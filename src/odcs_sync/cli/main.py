@@ -315,11 +315,21 @@ def sync_from_file(
 
             # Display results
             if dry_run:
+                has_changes = False
                 for result in results:
                     if result.plan and result.plan.has_changes:
                         console.print(format_plan(result.plan))
+                        has_changes = True
                     else:
                         console.print(f"[dim]No changes needed for {result.table_name}[/dim]")
+
+                # Exit with code 2 if changes detected (useful for CI/CD drift detection)
+                if has_changes:
+                    console.print(
+                        "\n[yellow]⚠️  Differences detected. "
+                        "Run without --dry-run to apply changes.[/yellow]"
+                    )
+                    raise typer.Exit(2)
             else:
                 console.print(format_sync_results(results))
 
