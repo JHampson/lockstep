@@ -57,7 +57,7 @@ Run directly from source without installing:
 ```bash
 cd /path/to/contract_sync
 uv run lockstep --help
-uv run lockstep from-file contracts/ --dry-run
+uv run lockstep plan contracts/
 ```
 
 ### Building Standalone Executable
@@ -79,9 +79,19 @@ uv run pyinstaller --onefile --name lockstep --clean src/lockstep/cli/main.py
 
 ## Authentication
 
-The tool supports multiple authentication methods for both **AWS** and **Azure** Databricks:
+The tool supports multiple authentication methods for both **AWS** and **Azure** Databricks via the `--auth-type` argument.
 
-### Option 1: OAuth (Interactive - Default)
+**Precedence order:** CLI parameters → Environment variables → Config file
+
+### Authentication Types
+
+| Type | Description | Required Options |
+|------|-------------|------------------|
+| `oauth` | Interactive OAuth (Databricks CLI, Azure CLI) | None (default) |
+| `pat` | Personal Access Token | `--token` |
+| `sp` | Service Principal / OAuth M2M | `--client-id`, `--client-secret` |
+
+### OAuth (Default)
 
 Uses the Databricks SDK credential chain (Azure CLI, Databricks CLI, environment variables):
 
@@ -89,21 +99,21 @@ Uses the Databricks SDK credential chain (Azure CLI, Databricks CLI, environment
 # First, authenticate with Databricks CLI
 databricks auth login --host https://your-workspace.databricks.com
 
-# Then run the tool
-lockstep from-file contracts/ \
+# Then run the tool (--auth-type oauth is the default)
+lockstep apply contracts/ \
   --host "https://your-workspace.databricks.com" \
-  --sql-endpoint "/sql/1.0/warehouses/xxx" \
-  --oauth
+  --sql-endpoint "/sql/1.0/warehouses/xxx"
 ```
 
-### Option 2: Service Principal / OAuth M2M (Recommended for CI/CD)
+### Service Principal (Recommended for CI/CD)
 
 Works on both AWS and Azure Databricks:
 
 ```bash
-lockstep from-file contracts/ \
+lockstep apply contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
+  --auth-type sp \
   --client-id "your-client-id" \
   --client-secret "your-client-secret"
 ```
@@ -113,46 +123,64 @@ Or via environment variables:
 ```bash
 export DATABRICKS_HOST="https://your-workspace.databricks.com"
 export DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/xxx"
+export DATABRICKS_AUTH_TYPE="sp"
 export DATABRICKS_CLIENT_ID="your-client-id"
 export DATABRICKS_CLIENT_SECRET="your-client-secret"
 
-lockstep from-file contracts/
+lockstep apply contracts/
 ```
 
-### Option 3: Personal Access Token
+### Personal Access Token
 
 ```bash
-lockstep from-file contracts/ \
+lockstep apply contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
-  --no-oauth \
+  --auth-type pat \
   --token "your-personal-access-token"
 ```
 
-Or via environment variable:
+Or via environment variables:
 
 ```bash
+export DATABRICKS_HOST="https://your-workspace.databricks.com"
+export DATABRICKS_HTTP_PATH="/sql/1.0/warehouses/xxx"
+export DATABRICKS_AUTH_TYPE="pat"
 export DATABRICKS_TOKEN="your-personal-access-token"
-lockstep from-file contracts/ --no-oauth
+
+lockstep apply contracts/
 ```
 
-### Option 4: Config File
+### Config File
 
-Create `~/.lockstep.yaml`:
+Create `~/.lockstep.yaml` or `~/.lockstep.toml`:
 
 ```yaml
+# ~/.lockstep.yaml
 host: "https://your-workspace.databricks.com"
 http_path: "/sql/1.0/warehouses/xxx"
 
 # Choose one authentication method:
 
 # Service Principal (recommended for automation)
+auth_type: "sp"
 client_id: "your-client-id"
 client_secret: "your-client-secret"
 
 # Or Personal Access Token
+# auth_type: "pat"
 # token: "your-token"
-# use_oauth: false
+```
+
+```toml
+# ~/.lockstep.toml
+host = "https://your-workspace.databricks.com"
+http_path = "/sql/1.0/warehouses/xxx"
+
+# Service Principal
+auth_type = "sp"
+client_id = "your-client-id"
+client_secret = "your-client-secret"
 ```
 
 ## Quick Start
@@ -223,31 +251,30 @@ tags:
 lockstep validate contracts/customers.yaml
 ```
 
-### 3. Preview Changes (Dry Run)
+### 3. Preview Changes (Plan)
 
 ```bash
-lockstep from-file contracts/customers.yaml \
+lockstep plan contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
-  --sql-endpoint "/sql/1.0/warehouses/xxx" \
-  --dry-run
+  --sql-endpoint "/sql/1.0/warehouses/xxx"
 ```
 
 ### 4. Apply Changes
 
 ```bash
-lockstep from-file contracts/customers.yaml \
+lockstep apply contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx"
 ```
 
 ## CLI Reference
 
-### `lockstep from-file`
+### `lockstep plan`
 
-Synchronize ODCS contracts to Unity Catalog.
+Show what changes would be made without applying them.
 
 ```bash
-lockstep from-file PATH [OPTIONS]
+lockstep plan PATH [OPTIONS]
 ```
 
 **Arguments:**
@@ -258,13 +285,61 @@ lockstep from-file PATH [OPTIONS]
 - `--sql-endpoint TEXT`: SQL warehouse endpoint path (e.g., `/sql/1.0/warehouses/xxx`)
 
 **Authentication Options:**
-- `--oauth/--no-oauth`: Use OAuth authentication (default: enabled)
-- `--client-id TEXT`: OAuth client ID for service principal / M2M auth
-- `--client-secret TEXT`: OAuth client secret for service principal / M2M auth
-- `--token TEXT`: Personal Access Token (use with `--no-oauth`)
+- `--auth-type TEXT`: Authentication type: `oauth` (default), `pat`, or `sp`
+- `--token TEXT`: Personal Access Token (required when `--auth-type pat`)
+- `--client-id TEXT`: OAuth client ID (required when `--auth-type sp`)
+- `--client-secret TEXT`: OAuth client secret (required when `--auth-type sp`)
+
+**Override Options:**
+- `--catalog-override TEXT`: Override catalog name from contracts
+- `--schema-override TEXT`: Override schema name from contracts
+- `--table-prefix TEXT`: Prefix to add to table names
+
+**Output Options:**
+- `--verbose, -v`: Enable verbose output
+- `--quiet, -q`: Suppress non-error output
+- `--junit-xml PATH`: Output results in JUnit XML format (for CI/CD integration)
+
+**Exit Codes:**
+- `0`: No changes needed (in sync)
+- `1`: Error occurred
+- `2`: Changes detected (drift)
+
+**Examples:**
+
+```bash
+# Preview changes for a single contract
+lockstep plan contracts/customer.yaml
+
+# Preview changes for all contracts
+lockstep plan contracts/
+
+# Output results as JUnit XML for CI/CD
+lockstep plan contracts/ --junit-xml reports/drift.xml
+```
+
+### `lockstep apply`
+
+Apply ODCS contracts to Unity Catalog.
+
+```bash
+lockstep apply PATH [OPTIONS]
+```
+
+**Arguments:**
+- `PATH`: Path to YAML file or directory containing contract files
+
+**Connection Options:**
+- `--host TEXT`: Databricks workspace host URL
+- `--sql-endpoint TEXT`: SQL warehouse endpoint path (e.g., `/sql/1.0/warehouses/xxx`)
+
+**Authentication Options:**
+- `--auth-type TEXT`: Authentication type: `oauth` (default), `pat`, or `sp`
+- `--token TEXT`: Personal Access Token (required when `--auth-type pat`)
+- `--client-id TEXT`: OAuth client ID (required when `--auth-type sp`)
+- `--client-secret TEXT`: OAuth client secret (required when `--auth-type sp`)
 
 **Sync Options:**
-- `--dry-run, -n`: Show planned changes without executing
 - `--allow-destructive`: Allow destructive operations (drop columns, remove tags)
 - `--preserve-extra-tags`: Don't remove tags that exist in catalog but not in contract
 - `--catalog-override TEXT`: Override catalog name from contracts
@@ -274,34 +349,33 @@ lockstep from-file PATH [OPTIONS]
 **Output Options:**
 - `--verbose, -v`: Enable verbose output
 - `--quiet, -q`: Suppress non-error output
+- `--junit-xml PATH`: Output results in JUnit XML format (for CI/CD integration)
 
 **Examples:**
 
 ```bash
-# Sync with OAuth (interactive)
-lockstep from-file contracts/ --host "https://..." --sql-endpoint "/sql/..." --oauth --dry-run
+# Apply a single contract
+lockstep apply contracts/customer.yaml
 
-# Sync with Service Principal (CI/CD)
-lockstep from-file contracts/ \
+# Apply with Service Principal (CI/CD)
+lockstep apply contracts/ \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx" \
+  --auth-type sp \
   --client-id "your-client-id" \
   --client-secret "your-client-secret"
 
-# Sync with Personal Access Token
-lockstep from-file contracts/ --no-oauth --token "dapi..."
+# Apply with Personal Access Token
+lockstep apply contracts/ --auth-type pat --token "dapi..."
 
-# Preview changes (dry run)
-lockstep from-file contracts/ --dry-run
-
-# Allow dropping columns
-lockstep from-file contracts/ --allow-destructive
+# Allow destructive changes (column drops, tag removal)
+lockstep apply contracts/ --allow-destructive
 
 # Override catalog for dev environment
-lockstep from-file contracts/ --catalog-override dev_catalog
+lockstep apply contracts/ --catalog-override dev_catalog
 
 # Preserve extra tags in Unity Catalog
-lockstep from-file contracts/ --preserve-extra-tags
+lockstep apply contracts/ --preserve-extra-tags
 ```
 
 ### `lockstep validate`
@@ -317,6 +391,7 @@ lockstep validate PATH [OPTIONS]
 
 **Options:**
 - `--verbose, -v`: Show detailed validation output
+- `--junit-xml PATH`: Output results in JUnit XML format (for CI/CD integration)
 
 **Examples:**
 
@@ -326,6 +401,9 @@ lockstep validate contracts/customers.yaml
 
 # Validate all files in a directory
 lockstep validate contracts/
+
+# Validate and output JUnit XML report (for CI/CD)
+lockstep validate contracts/ --junit-xml reports/validation-report.xml
 ```
 
 ## ODCS Contract Schema
@@ -425,20 +503,31 @@ The CLI uses specific exit codes for CI/CD integration:
 |-----------|---------|
 | **0** | Success - no changes needed (in sync) |
 | **1** | Error - sync failed, connection error, or validation error |
-| **2** | Differences detected (dry-run mode only) |
+| **2** | Drift detected (`lockstep plan` only) |
 
 ### CI/CD Drift Detection
 
-Use `--dry-run` to detect drift between contracts and Unity Catalog:
+Use `lockstep plan` to detect drift between contracts and Unity Catalog. This command:
+- Makes no changes to Unity Catalog
+- Exits with code 0 if in sync, code 2 if drift detected
+- Optionally outputs JUnit XML reports for CI/CD test reporting
 
 ```bash
 #!/bin/bash
-lockstep from-file contracts/ \
+# Check for drift - exit 0 if in sync, 2 if drift detected
+lockstep plan contracts/ \
+  --host "$DATABRICKS_HOST" \
+  --sql-endpoint "$DATABRICKS_HTTP_PATH" \
+  --client-id "$DATABRICKS_CLIENT_ID" \
+  --client-secret "$DATABRICKS_CLIENT_SECRET"
+
+# With JUnit XML output for CI/CD reporting
+lockstep plan contracts/ \
   --host "$DATABRICKS_HOST" \
   --sql-endpoint "$DATABRICKS_HTTP_PATH" \
   --client-id "$DATABRICKS_CLIENT_ID" \
   --client-secret "$DATABRICKS_CLIENT_SECRET" \
-  --dry-run
+  --junit-xml reports/drift-report.xml
 
 exit_code=$?
 
@@ -496,7 +585,15 @@ jobs:
           
       - name: Validate contract syntax
         run: |
-          lockstep validate contracts/
+          mkdir -p reports
+          lockstep validate contracts/ --junit-xml reports/validation.xml
+          
+      - name: Upload validation report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-report
+          path: reports/validation.xml
 
   drift-check:
     name: Check for Drift
@@ -526,7 +623,8 @@ jobs:
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
           set +e
-          lockstep from-file contracts/ --dry-run
+          mkdir -p reports
+          lockstep plan contracts/ --junit-xml reports/drift-check.xml
           exit_code=$?
           set -e
           
@@ -540,6 +638,19 @@ jobs:
             echo "::error::Sync check failed"
             exit 1
           fi
+          
+      - name: Upload drift check report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: drift-check-report
+          path: reports/drift-check.xml
+          
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: reports/*.xml
 
   apply:
     name: Apply Changes
@@ -567,7 +678,7 @@ jobs:
           DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
           DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
         run: |
-          lockstep from-file contracts/
+          lockstep apply contracts/
           
       - name: Summary
         run: |
@@ -643,7 +754,7 @@ stages:
             displayName: 'Install lockstep'
             
           - script: |
-              lockstep from-file contracts/ --dry-run
+              lockstep plan contracts/
               exit_code=$?
               if [ $exit_code -eq 2 ]; then
                 echo "##vso[task.logissue type=warning]Contract drift detected"
@@ -685,7 +796,7 @@ stages:
                   displayName: 'Install lockstep'
                   
                 - script: |
-                    lockstep from-file contracts/
+                    lockstep apply contracts/
                   displayName: 'Apply contract changes'
                   env:
                     DATABRICKS_HOST: $(DATABRICKS_HOST)

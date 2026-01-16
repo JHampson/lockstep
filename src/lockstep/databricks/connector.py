@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 
 from databricks import sql as databricks_sql
 
-from lockstep.databricks.config import DatabricksConfig
+from lockstep.databricks.config import AuthType, DatabricksConfig
 
 if TYPE_CHECKING:
     from databricks.sql.client import Connection, Cursor
@@ -41,10 +41,20 @@ class DatabricksConnector:
             DatabricksConnectionError: If configuration is invalid.
         """
         if not config.is_configured():
+            missing = []
+            if not config.host:
+                missing.append("host")
+            if not config.http_path:
+                missing.append("sql-endpoint")
+            if config.auth_type == AuthType.PAT and not config.token:
+                missing.append("token (required for auth-type=pat)")
+            if config.auth_type == AuthType.SP and not config.client_id:
+                missing.append("client-id (required for auth-type=sp)")
+            if config.auth_type == AuthType.SP and not config.client_secret:
+                missing.append("client-secret (required for auth-type=sp)")
+
             raise DatabricksConnectionError(
-                "Databricks configuration is incomplete. "
-                "Please set DATABRICKS_HOST and DATABRICKS_HTTP_PATH "
-                "environment variables or provide them via config file."
+                f"Databricks configuration is incomplete. Missing: {', '.join(missing)}"
             )
 
         self.config = config
@@ -57,92 +67,92 @@ class DatabricksConnector:
             "http_path": self.config.http_path,
         }
 
-        # Authentication - check service principal first, then OAuth, then token
-        if self.config.has_service_principal():
+        auth_type = self.config.auth_type
+
+        if auth_type == AuthType.SP:
             # Service Principal / OAuth M2M authentication
-            # Works on both AWS (OAuth M2M) and Azure (Service Principal)
-            try:
-                from databricks.sdk.core import Config
-
-                sp_config = Config(
-                    host=self.config.host,
-                    client_id=self.config.client_id,
-                    client_secret=self.config.client_secret,
-                )
-
-                # Get the auth headers and extract the token
-                auth_headers = sp_config.authenticate()
-                auth_header = auth_headers.get("Authorization", "")
-                if auth_header.startswith("Bearer "):
-                    token = auth_header[7:]  # Remove "Bearer " prefix
-                    kwargs["access_token"] = token
-                    logger.debug("Using Service Principal / OAuth M2M authentication")
-                else:
-                    raise DatabricksConnectionError(
-                        "Service Principal authentication returned unexpected format. "
-                        f"Got: {list(auth_headers.keys())}"
-                    )
-            except ImportError as e:
-                raise DatabricksConnectionError(
-                    "Service Principal authentication requires databricks-sdk. "
-                    "Please install it with: pip install databricks-sdk"
-                ) from e
-            except Exception as e:
-                raise DatabricksConnectionError(
-                    f"Service Principal / OAuth M2M authentication failed: {e}"
-                ) from e
-
-        elif self.config.use_oauth:
-            # Use Databricks SDK for OAuth credential chain
-            try:
-                from databricks.sdk.core import Config
-
-                # Create SDK config - it will use Azure CLI, env vars, etc.
-                sdk_config = Config(host=self.config.host)
-
-                # Get the auth headers and extract the token
-                auth_headers = sdk_config.authenticate()
-                auth_header = auth_headers.get("Authorization", "")
-                if auth_header.startswith("Bearer "):
-                    token = auth_header[7:]  # Remove "Bearer " prefix
-                    kwargs["access_token"] = token
-                    logger.debug("Using OAuth token from Databricks SDK")
-                else:
-                    raise DatabricksConnectionError(
-                        "OAuth authentication returned unexpected format. "
-                        f"Got: {list(auth_headers.keys())}"
-                    )
-            except ImportError as e:
-                logger.warning(f"Databricks SDK not available ({e}), falling back to token auth")
-                if self.config.token:
-                    kwargs["access_token"] = self.config.token
-                else:
-                    raise DatabricksConnectionError(
-                        "OAuth authentication failed (databricks-sdk not installed) "
-                        "and no access token provided. "
-                        "Please install databricks-sdk or set DATABRICKS_TOKEN."
-                    ) from e
-            except DatabricksConnectionError:
-                raise
-            except Exception as e:
-                logger.warning(f"OAuth setup failed ({e}), falling back to token auth")
-                if self.config.token:
-                    kwargs["access_token"] = self.config.token
-                else:
-                    raise DatabricksConnectionError(
-                        "OAuth authentication failed and no access token provided. "
-                        "Please set DATABRICKS_TOKEN or configure OAuth credentials."
-                    ) from e
-        elif self.config.token:
-            kwargs["access_token"] = self.config.token
-            logger.debug("Using token authentication")
-        else:
-            raise DatabricksConnectionError(
-                "No authentication method available. "
-                "Please enable OAuth or provide DATABRICKS_TOKEN."
-            )
+            self._authenticate_service_principal(kwargs)
+        elif auth_type == AuthType.PAT:
+            # Personal Access Token authentication
+            self._authenticate_token(kwargs)
+        else:  # AuthType.OAUTH
+            # OAuth authentication (Databricks CLI, Azure CLI, etc.)
+            self._authenticate_oauth(kwargs)
 
         return kwargs
+
+    def _authenticate_service_principal(self, kwargs: dict[str, Any]) -> None:
+        """Authenticate using Service Principal (OAuth M2M)."""
+        try:
+            from databricks.sdk.core import Config
+
+            sp_config = Config(
+                host=self.config.host,
+                client_id=self.config.client_id,
+                client_secret=self.config.client_secret,
+            )
+
+            # Get the auth headers and extract the token
+            auth_headers = sp_config.authenticate()
+            auth_header = auth_headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]  # Remove "Bearer " prefix
+                kwargs["access_token"] = token
+                logger.debug("Using Service Principal authentication")
+            else:
+                raise DatabricksConnectionError(
+                    "Service Principal authentication returned unexpected format. "
+                    f"Got: {list(auth_headers.keys())}"
+                )
+        except ImportError as e:
+            raise DatabricksConnectionError(
+                "Service Principal authentication requires databricks-sdk. "
+                "Please install it with: pip install databricks-sdk"
+            ) from e
+        except DatabricksConnectionError:
+            raise
+        except Exception as e:
+            raise DatabricksConnectionError(f"Service Principal authentication failed: {e}") from e
+
+    def _authenticate_token(self, kwargs: dict[str, Any]) -> None:
+        """Authenticate using Personal Access Token."""
+        if not self.config.token:
+            raise DatabricksConnectionError(
+                "Personal Access Token required for auth-type=pat. "
+                "Please set DATABRICKS_TOKEN or use --token."
+            )
+        kwargs["access_token"] = self.config.token
+        logger.debug("Using Personal Access Token authentication")
+
+    def _authenticate_oauth(self, kwargs: dict[str, Any]) -> None:
+        """Authenticate using OAuth (Databricks CLI, Azure CLI, etc.)."""
+        try:
+            from databricks.sdk.core import Config
+
+            # Create SDK config - it will use Azure CLI, Databricks CLI, env vars, etc.
+            sdk_config = Config(host=self.config.host)
+
+            # Get the auth headers and extract the token
+            auth_headers = sdk_config.authenticate()
+            auth_header = auth_headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header[7:]  # Remove "Bearer " prefix
+                kwargs["access_token"] = token
+                logger.debug("Using OAuth authentication")
+            else:
+                raise DatabricksConnectionError(
+                    "OAuth authentication returned unexpected format. "
+                    f"Got: {list(auth_headers.keys())}"
+                )
+        except ImportError as e:
+            raise DatabricksConnectionError(
+                "OAuth authentication requires databricks-sdk. "
+                "Please install it with: pip install databricks-sdk"
+            ) from e
+        except DatabricksConnectionError:
+            raise
+        except Exception as e:
+            raise DatabricksConnectionError(f"OAuth authentication failed: {e}") from e
 
     def connect(self) -> Connection:
         """Establish a connection to Databricks SQL endpoint.
@@ -161,6 +171,8 @@ class DatabricksConnector:
             self._connection = databricks_sql.connect(**kwargs)
             logger.info(f"Connected to Databricks at {self.config.host}")
             return self._connection
+        except DatabricksConnectionError:
+            raise
         except Exception as e:
             raise DatabricksConnectionError(f"Failed to connect to Databricks: {e}") from e
 

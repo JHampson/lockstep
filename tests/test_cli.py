@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 from typer.testing import CliRunner
 
 from lockstep.cli.main import _get_databricks_config, app
+from lockstep.databricks.config import AuthType
 from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
 from lockstep.services.sync import SyncResult
 
@@ -67,20 +68,11 @@ class TestValidateCommand:
         assert result.exit_code == 0
 
 
-class TestFromFileCommand:
-    """Tests for from-file command."""
+class TestPlanCommand:
+    """Tests for plan command."""
 
-    def test_from_file_invalid_contract(self, tmp_path: Path) -> None:
-        """Test from-file with invalid contract."""
-        invalid_file = tmp_path / "invalid.yaml"
-        # Use invalid status value to trigger validation error
-        invalid_file.write_text("name: test_contract\nstatus: not_a_valid_status\n")
-
-        result = runner.invoke(app, ["from-file", str(invalid_file), "--no-oauth"])
-        assert result.exit_code == 1
-
-    def test_from_file_dry_run_no_changes(self, tmp_contract_file: Path) -> None:
-        """Test dry run when no changes needed."""
+    def test_plan_no_changes(self, tmp_contract_file: Path) -> None:
+        """Test plan when no changes needed."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
             patch("lockstep.cli.main.SyncService") as mock_sync_cls,
@@ -108,23 +100,24 @@ class TestFromFileCommand:
             result = runner.invoke(
                 app,
                 [
-                    "from-file",
+                    "plan",
                     str(tmp_contract_file),
                     "--host",
                     "https://test.databricks.com",
                     "--sql-endpoint",
                     "/sql/test",
+                    "--auth-type",
+                    "pat",
                     "--token",
                     "test-token",
-                    "--dry-run",
                 ],
             )
 
             assert result.exit_code == 0
-            assert "No changes" in result.stdout or "DRY RUN" in result.stdout
+            assert "in sync" in result.stdout
 
-    def test_from_file_dry_run_with_changes(self, tmp_contract_file: Path) -> None:
-        """Test dry run when changes are detected."""
+    def test_plan_with_changes(self, tmp_contract_file: Path) -> None:
+        """Test plan when changes are detected."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
             patch("lockstep.cli.main.SyncService") as mock_sync_cls,
@@ -159,24 +152,66 @@ class TestFromFileCommand:
             result = runner.invoke(
                 app,
                 [
-                    "from-file",
+                    "plan",
                     str(tmp_contract_file),
                     "--host",
                     "https://test.databricks.com",
                     "--sql-endpoint",
                     "/sql/test",
+                    "--auth-type",
+                    "pat",
                     "--token",
                     "test-token",
-                    "--dry-run",
                 ],
             )
 
-            # Exit code 2 = changes detected
+            # Exit code 2 = drift detected
             assert result.exit_code == 2
-            assert "Differences detected" in result.stdout
+            assert "Changes detected" in result.stdout
 
-    def test_from_file_actual_sync(self, tmp_contract_file: Path) -> None:
-        """Test actual sync (not dry run)."""
+    def test_plan_invalid_contract(self, tmp_path: Path) -> None:
+        """Test plan with invalid contract."""
+        invalid_file = tmp_path / "invalid.yaml"
+        invalid_file.write_text("name: test_contract\nstatus: not_a_valid_status\n")
+
+        result = runner.invoke(
+            app,
+            [
+                "plan",
+                str(invalid_file),
+                "--host",
+                "https://test.databricks.com",
+                "--sql-endpoint",
+                "/sql/test",
+            ],
+        )
+        assert result.exit_code == 1
+
+
+class TestApplyCommand:
+    """Tests for apply command."""
+
+    def test_apply_invalid_contract(self, tmp_path: Path) -> None:
+        """Test apply with invalid contract."""
+        invalid_file = tmp_path / "invalid.yaml"
+        # Use invalid status value to trigger validation error
+        invalid_file.write_text("name: test_contract\nstatus: not_a_valid_status\n")
+
+        result = runner.invoke(
+            app,
+            [
+                "apply",
+                str(invalid_file),
+                "--host",
+                "https://test.databricks.com",
+                "--sql-endpoint",
+                "/sql/test",
+            ],
+        )
+        assert result.exit_code == 1
+
+    def test_apply_success(self, tmp_contract_file: Path) -> None:
+        """Test successful apply."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
             patch("lockstep.cli.main.SyncService") as mock_sync_cls,
@@ -200,12 +235,14 @@ class TestFromFileCommand:
             result = runner.invoke(
                 app,
                 [
-                    "from-file",
+                    "apply",
                     str(tmp_contract_file),
                     "--host",
                     "https://test.databricks.com",
                     "--sql-endpoint",
                     "/sql/test",
+                    "--auth-type",
+                    "pat",
                     "--token",
                     "test-token",
                 ],
@@ -213,8 +250,8 @@ class TestFromFileCommand:
 
             assert result.exit_code == 0
 
-    def test_from_file_with_overrides(self, tmp_contract_file: Path) -> None:
-        """Test from-file with catalog/schema overrides."""
+    def test_apply_with_overrides(self, tmp_contract_file: Path) -> None:
+        """Test apply with catalog/schema overrides."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
             patch("lockstep.cli.main.SyncService") as mock_sync_cls,
@@ -233,12 +270,14 @@ class TestFromFileCommand:
             result = runner.invoke(
                 app,
                 [
-                    "from-file",
+                    "apply",
                     str(tmp_contract_file),
                     "--host",
                     "https://test.databricks.com",
                     "--sql-endpoint",
                     "/sql/test",
+                    "--auth-type",
+                    "pat",
                     "--token",
                     "test-token",
                     "--catalog-override",
@@ -258,7 +297,7 @@ class TestFromFileCommand:
             assert options.schema_override == "test"
             assert options.table_prefix == "stg_"
 
-    def test_from_file_allow_destructive(self, tmp_contract_file: Path) -> None:
+    def test_apply_allow_destructive(self, tmp_contract_file: Path) -> None:
         """Test --allow-destructive flag."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
@@ -278,12 +317,14 @@ class TestFromFileCommand:
             result = runner.invoke(
                 app,
                 [
-                    "from-file",
+                    "apply",
                     str(tmp_contract_file),
                     "--host",
                     "https://test.databricks.com",
                     "--sql-endpoint",
                     "/sql/test",
+                    "--auth-type",
+                    "pat",
                     "--token",
                     "test-token",
                     "--allow-destructive",
@@ -295,7 +336,7 @@ class TestFromFileCommand:
             options = call_args[0][1]
             assert options.allow_destructive is True
 
-    def test_from_file_preserve_extra_tags(self, tmp_contract_file: Path) -> None:
+    def test_apply_preserve_extra_tags(self, tmp_contract_file: Path) -> None:
         """Test --preserve-extra-tags flag."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
@@ -315,12 +356,14 @@ class TestFromFileCommand:
             result = runner.invoke(
                 app,
                 [
-                    "from-file",
+                    "apply",
                     str(tmp_contract_file),
                     "--host",
                     "https://test.databricks.com",
                     "--sql-endpoint",
                     "/sql/test",
+                    "--auth-type",
+                    "pat",
                     "--token",
                     "test-token",
                     "--preserve-extra-tags",
@@ -336,39 +379,56 @@ class TestFromFileCommand:
 class TestGetDatabricksConfig:
     """Tests for _get_databricks_config helper."""
 
-    def test_token_disables_oauth(self) -> None:
-        """Test that providing a token automatically disables OAuth."""
+    def test_default_auth_type_is_oauth(self) -> None:
+        """Test that default auth type is OAuth."""
         config = _get_databricks_config(
             host="https://test.databricks.com",
             http_path="/sql/test",
+            auth_type=None,
+            token=None,
+            client_id=None,
+            client_secret=None,
+        )
+        assert config.auth_type == AuthType.OAUTH
+
+    def test_pat_auth_type(self) -> None:
+        """Test PAT authentication type."""
+        config = _get_databricks_config(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type="pat",
             token="my-token",
-            use_oauth=True,  # Should be overridden
+            client_id=None,
+            client_secret=None,
         )
+        assert config.auth_type == AuthType.PAT
         assert config.token == "my-token"
-        assert config.use_oauth is False
 
-    def test_no_token_keeps_oauth(self) -> None:
-        """Test that OAuth stays enabled when no token provided."""
+    def test_sp_auth_type(self) -> None:
+        """Test Service Principal authentication type."""
         config = _get_databricks_config(
             host="https://test.databricks.com",
             http_path="/sql/test",
+            auth_type="sp",
             token=None,
-            use_oauth=True,
-        )
-        assert config.use_oauth is True
-
-    def test_service_principal_config(self) -> None:
-        """Test service principal configuration."""
-        config = _get_databricks_config(
-            host="https://test.databricks.com",
-            http_path="/sql/test",
-            token=None,
-            use_oauth=True,
             client_id="client-id",
             client_secret="client-secret",
         )
+        assert config.auth_type == AuthType.SP
         assert config.client_id == "client-id"
         assert config.client_secret == "client-secret"
+
+    def test_auth_type_case_insensitive(self) -> None:
+        """Test that auth type is case insensitive."""
+        config = _get_databricks_config(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type="PAT",
+            token="my-token",
+            client_id=None,
+            client_secret=None,
+        )
+        assert config.auth_type == AuthType.PAT
 
 
 class TestHelpMessages:
@@ -378,16 +438,25 @@ class TestHelpMessages:
         """Test main help message."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "from-file" in result.stdout
+        assert "plan" in result.stdout
+        assert "apply" in result.stdout
         assert "validate" in result.stdout
 
-    def test_from_file_help(self) -> None:
-        """Test from-file help message."""
-        result = runner.invoke(app, ["from-file", "--help"])
+    def test_plan_help(self) -> None:
+        """Test plan help message."""
+        result = runner.invoke(app, ["plan", "--help"])
         assert result.exit_code == 0
-        assert "--dry-run" in result.stdout
+        assert "--junit-xml" in result.stdout
+        assert "--catalog-override" in result.stdout
+        assert "--auth-type" in result.stdout
+
+    def test_apply_help(self) -> None:
+        """Test apply help message."""
+        result = runner.invoke(app, ["apply", "--help"])
+        assert result.exit_code == 0
         assert "--allow-destructive" in result.stdout
         assert "--catalog-override" in result.stdout
+        assert "--auth-type" in result.stdout
         assert "--token" in result.stdout
         assert "--client-id" in result.stdout
 

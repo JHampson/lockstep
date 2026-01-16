@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from lockstep.databricks.config import DatabricksConfig, _load_config_file
+from lockstep.databricks.config import AuthType, DatabricksConfig, _load_config_file
 
 
 class TestDatabricksConfig:
@@ -17,17 +17,56 @@ class TestDatabricksConfig:
         config = DatabricksConfig(host="https://test.databricks.com", http_path="/sql/test")
         assert config.host == "https://test.databricks.com"
         assert config.http_path == "/sql/test"
-        assert config.use_oauth is True
+        assert config.auth_type == AuthType.OAUTH
         assert config.token is None
         assert config.client_id is None
         assert config.client_secret is None
         assert config.timeout_seconds == 300
         assert config.retry_count == 3
 
-    def test_is_configured_true(self) -> None:
-        """Test is_configured returns True when host and http_path are set."""
+    def test_is_configured_true_oauth(self) -> None:
+        """Test is_configured returns True for OAuth with host and http_path."""
         config = DatabricksConfig(host="https://test.databricks.com", http_path="/sql/test")
         assert config.is_configured() is True
+
+    def test_is_configured_true_pat(self) -> None:
+        """Test is_configured returns True for PAT with token."""
+        config = DatabricksConfig(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type=AuthType.PAT,
+            token="my-token",
+        )
+        assert config.is_configured() is True
+
+    def test_is_configured_false_pat_no_token(self) -> None:
+        """Test is_configured returns False for PAT without token."""
+        config = DatabricksConfig(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type=AuthType.PAT,
+        )
+        assert config.is_configured() is False
+
+    def test_is_configured_true_sp(self) -> None:
+        """Test is_configured returns True for SP with credentials."""
+        config = DatabricksConfig(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type=AuthType.SP,
+            client_id="my-client-id",
+            client_secret="my-secret",
+        )
+        assert config.is_configured() is True
+
+    def test_is_configured_false_sp_no_credentials(self) -> None:
+        """Test is_configured returns False for SP without credentials."""
+        config = DatabricksConfig(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type=AuthType.SP,
+        )
+        assert config.is_configured() is False
 
     def test_is_configured_false_missing_host(self) -> None:
         """Test is_configured returns False when host is missing."""
@@ -39,83 +78,35 @@ class TestDatabricksConfig:
         config = DatabricksConfig(host="https://test.databricks.com", http_path="")
         assert config.is_configured() is False
 
-    def test_has_service_principal_true(self) -> None:
-        """Test has_service_principal returns True when both client_id and secret are set."""
+    def test_get_auth_description_oauth(self) -> None:
+        """Test get_auth_description returns OAuth."""
         config = DatabricksConfig(
             host="https://test.databricks.com",
             http_path="/sql/test",
-            client_id="test-client-id",
-            client_secret="test-secret",
+            auth_type=AuthType.OAUTH,
         )
-        assert config.has_service_principal() is True
+        assert config.get_auth_description() == "OAuth"
 
-    def test_has_service_principal_false_missing_id(self) -> None:
-        """Test has_service_principal returns False when client_id is missing."""
+    def test_get_auth_description_pat(self) -> None:
+        """Test get_auth_description returns Personal Access Token."""
         config = DatabricksConfig(
             host="https://test.databricks.com",
             http_path="/sql/test",
-            client_secret="test-secret",
+            auth_type=AuthType.PAT,
+            token="my-token",
         )
-        assert config.has_service_principal() is False
+        assert config.get_auth_description() == "Personal Access Token"
 
-    def test_has_service_principal_false_missing_secret(self) -> None:
-        """Test has_service_principal returns False when client_secret is missing."""
+    def test_get_auth_description_sp(self) -> None:
+        """Test get_auth_description returns Service Principal."""
         config = DatabricksConfig(
             host="https://test.databricks.com",
             http_path="/sql/test",
-            client_id="test-client-id",
+            auth_type=AuthType.SP,
+            client_id="my-client-id",
+            client_secret="my-secret",
         )
-        assert config.has_service_principal() is False
-
-    def test_get_auth_type_service_principal(self) -> None:
-        """Test get_auth_type returns service_principal when configured."""
-        config = DatabricksConfig(
-            host="https://test.databricks.com",
-            http_path="/sql/test",
-            client_id="test-client-id",
-            client_secret="test-secret",
-        )
-        assert config.get_auth_type() == "service_principal"
-
-    def test_get_auth_type_oauth(self) -> None:
-        """Test get_auth_type returns oauth when use_oauth is True."""
-        config = DatabricksConfig(
-            host="https://test.databricks.com",
-            http_path="/sql/test",
-            use_oauth=True,
-        )
-        assert config.get_auth_type() == "oauth"
-
-    def test_get_auth_type_token(self) -> None:
-        """Test get_auth_type returns token when token is set and oauth is disabled."""
-        config = DatabricksConfig(
-            host="https://test.databricks.com",
-            http_path="/sql/test",
-            use_oauth=False,
-            token="test-token",
-        )
-        assert config.get_auth_type() == "token"
-
-    def test_get_auth_type_none(self) -> None:
-        """Test get_auth_type returns none when no auth is configured."""
-        config = DatabricksConfig(
-            host="https://test.databricks.com",
-            http_path="/sql/test",
-            use_oauth=False,
-        )
-        assert config.get_auth_type() == "none"
-
-    def test_service_principal_takes_precedence(self) -> None:
-        """Test that service principal auth takes precedence over oauth."""
-        config = DatabricksConfig(
-            host="https://test.databricks.com",
-            http_path="/sql/test",
-            use_oauth=True,
-            token="test-token",
-            client_id="test-client-id",
-            client_secret="test-secret",
-        )
-        assert config.get_auth_type() == "service_principal"
+        assert config.get_auth_description() == "Service Principal"
 
     def test_load_from_environment_variables(self) -> None:
         """Test that config loads from environment variables."""
@@ -131,6 +122,20 @@ class TestDatabricksConfig:
             assert config.host == "https://env-test.databricks.com"
             assert config.http_path == "/sql/env-test"
             assert config.token == "env-token"
+
+    def test_auth_type_from_environment(self) -> None:
+        """Test that auth_type can be loaded from environment variable."""
+        with patch.dict(
+            os.environ,
+            {
+                "DATABRICKS_HOST": "https://test.databricks.com",
+                "DATABRICKS_HTTP_PATH": "/sql/test",
+                "DATABRICKS_AUTH_TYPE": "pat",
+                "DATABRICKS_TOKEN": "env-token",
+            },
+        ):
+            config = DatabricksConfig()
+            assert config.auth_type == AuthType.PAT
 
 
 class TestLoadConfigFile:
@@ -213,6 +218,7 @@ class TestLoadConfigFile:
         config_file.write_text(
             'host = "https://toml-sp.databricks.com"\n'
             'http_path = "/sql/test"\n'
+            'auth_type = "sp"\n'
             'client_id = "my-client-id"\n'
             'client_secret = "my-client-secret"\n'
         )
@@ -220,6 +226,7 @@ class TestLoadConfigFile:
         with patch("lockstep.databricks.config.Path.home", return_value=tmp_path):
             result = _load_config_file()
             assert result["host"] == "https://toml-sp.databricks.com"
+            assert result["auth_type"] == "sp"
             assert result["client_id"] == "my-client-id"
             assert result["client_secret"] == "my-client-secret"
 
@@ -229,7 +236,7 @@ class TestLoadConfigFile:
         config_file.write_text(
             'host = "https://toml-integration.databricks.com"\n'
             'http_path = "/sql/integration"\n'
-            "use_oauth = false\n"
+            'auth_type = "pat"\n'
             'token = "toml-token"\n'
         )
 
@@ -237,6 +244,6 @@ class TestLoadConfigFile:
             config = DatabricksConfig()
             assert config.host == "https://toml-integration.databricks.com"
             assert config.http_path == "/sql/integration"
-            assert config.use_oauth is False
+            assert config.auth_type == AuthType.PAT
             assert config.token == "toml-token"
-            assert config.get_auth_type() == "token"
+            assert config.get_auth_description() == "Personal Access Token"

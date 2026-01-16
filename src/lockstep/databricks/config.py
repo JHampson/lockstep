@@ -1,20 +1,30 @@
 """Configuration for Databricks connectivity.
 
 Supports configuration via:
+- CLI parameters (highest precedence)
 - Environment variables
-- CLI parameters
-- Config file (~/.lockstep.toml or ~/.lockstep.yaml)
+- Config file (~/.lockstep.toml or ~/.lockstep.yaml) (lowest precedence)
 """
 
 from __future__ import annotations
 
+import contextlib
 import os
+from enum import Enum
 from pathlib import Path
 from typing import Any
 
 import yaml
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class AuthType(str, Enum):
+    """Authentication type for Databricks connection."""
+
+    OAUTH = "oauth"  # Interactive OAuth / Databricks CLI / Azure CLI
+    PAT = "pat"  # Personal Access Token
+    SP = "sp"  # Service Principal (OAuth M2M)
 
 
 def _load_config_file() -> dict[str, Any]:
@@ -66,25 +76,26 @@ class DatabricksConfig(BaseSettings):
         description="SQL warehouse endpoint path (e.g., /sql/1.0/warehouses/xxx)",
     )
 
-    # Authentication - prefer OAuth, fallback to PAT
-    token: str | None = Field(
-        default=None,
-        description="Personal Access Token (fallback if OAuth not available)",
-    )
-    use_oauth: bool = Field(
-        default=True,
-        description="Use OAuth for authentication (requires databricks-sdk)",
+    # Authentication type
+    auth_type: AuthType = Field(
+        default=AuthType.OAUTH,
+        description="Authentication type: oauth, pat, or sp",
     )
 
-    # Service Principal / OAuth M2M authentication
-    # Works on both AWS (OAuth M2M) and Azure (Service Principal)
+    # Token for PAT authentication
+    token: str | None = Field(
+        default=None,
+        description="Personal Access Token (required for auth_type=pat)",
+    )
+
+    # Service Principal credentials (for auth_type=sp)
     client_id: str | None = Field(
         default=None,
-        description="OAuth client ID for service principal / M2M auth",
+        description="OAuth client ID for service principal auth (required for auth_type=sp)",
     )
     client_secret: str | None = Field(
         default=None,
-        description="OAuth client secret for service principal / M2M auth",
+        description="OAuth client secret for service principal auth (required for auth_type=sp)",
     )
 
     # Optional defaults
@@ -117,8 +128,8 @@ class DatabricksConfig(BaseSettings):
         key_mapping = {
             "host": "host",
             "http_path": "http_path",
+            "auth_type": "auth_type",
             "token": "token",
-            "use_oauth": "use_oauth",
             "client_id": "client_id",
             "client_secret": "client_secret",
             "catalog_default": "catalog_default",
@@ -145,22 +156,29 @@ class DatabricksConfig(BaseSettings):
         if not self.http_path:
             self.http_path = os.getenv("DATABRICKS_HTTP_PATH", "")
 
+        # Check auth_type from environment if not set
+        env_auth_type = os.getenv("DATABRICKS_AUTH_TYPE")
+        if env_auth_type:
+            with contextlib.suppress(ValueError):
+                self.auth_type = AuthType(env_auth_type.lower())
+
         return self
 
     def is_configured(self) -> bool:
         """Check if the configuration has required values."""
-        return bool(self.host and self.http_path)
+        if not self.host or not self.http_path:
+            return False
 
-    def has_service_principal(self) -> bool:
-        """Check if service principal credentials are configured."""
-        return bool(self.client_id and self.client_secret)
+        # Check auth-specific requirements
+        if self.auth_type == AuthType.PAT and not self.token:
+            return False
 
-    def get_auth_type(self) -> str:
-        """Return the authentication type being used."""
-        if self.has_service_principal():
-            return "service_principal"
-        if self.use_oauth:
-            return "oauth"
-        if self.token:
-            return "token"
-        return "none"
+        return not (self.auth_type == AuthType.SP and not (self.client_id and self.client_secret))
+
+    def get_auth_description(self) -> str:
+        """Return a human-readable description of the authentication being used."""
+        if self.auth_type == AuthType.SP:
+            return "Service Principal"
+        if self.auth_type == AuthType.PAT:
+            return "Personal Access Token"
+        return "OAuth"
