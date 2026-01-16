@@ -23,7 +23,7 @@ Install as a global CLI tool with an isolated environment:
 uv tool install --python python3.11 /path/to/contract_sync
 
 # From git repository
-uv tool install --python python3.11 git+https://github.com/your-org/lockstep.git
+uv tool install --python python3.11 git+https://github.com/JHampson/lockstep.git
 
 # Upgrade to latest version
 uv tool upgrade lockstep
@@ -42,7 +42,7 @@ The tool installs to:
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/lockstep.git
+git clone https://github.com/JHampson/lockstep.git
 cd lockstep
 pip install .
 
@@ -708,7 +708,7 @@ Create a variable group named `databricks-credentials` in Azure DevOps with:
 
 ```bash
 # Clone and install
-git clone https://github.com/your-org/lockstep.git
+git clone https://github.com/JHampson/lockstep.git
 cd lockstep
 uv venv
 source .venv/bin/activate

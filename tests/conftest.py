@@ -14,7 +14,7 @@ from lockstep.models.contract import Contract
 
 @pytest.fixture
 def sample_contract_data() -> dict[str, Any]:
-    """Sample ODCS contract data for testing."""
+    """Sample ODCS contract data for testing (legacy format)."""
     return {
         "apiVersion": "v3.0.0",
         "kind": "DataContract",
@@ -63,6 +63,67 @@ def sample_contract_data() -> dict[str, Any]:
             "team": "customer-success",
             "system.certification_status": "certified",
         },
+    }
+
+
+@pytest.fixture
+def sample_contract_data_v3() -> dict[str, Any]:
+    """Sample ODCS v3 contract data for testing (new format)."""
+    return {
+        "apiVersion": "v3.0.0",
+        "kind": "DataContract",
+        "id": "customer-contract",
+        "name": "customer_contract",
+        "version": "1.0.0",
+        "status": "active",
+        "description": {
+            "usage": "Customer data contract for sales analytics",
+        },
+        "servers": [
+            {
+                "server": "databricks-prod",
+                "type": "databricks",
+                "host": "example.databricks.com",
+                "catalog": "main",
+                "schema": "sales",
+            }
+        ],
+        "schema": [
+            {
+                "name": "customers",
+                "physicalType": "table",
+                "description": "Customer master data",
+                "properties": [
+                    {
+                        "name": "customer_id",
+                        "logicalType": "string",
+                        "description": "Unique customer identifier",
+                        "required": True,
+                        "primaryKey": True,
+                    },
+                    {
+                        "name": "email",
+                        "logicalType": "string",
+                        "description": "Customer email address",
+                        "required": True,
+                    },
+                    {
+                        "name": "total_spent",
+                        "logicalType": "number",
+                        "description": "Total amount spent",
+                        "required": False,
+                        "logicalTypeOptions": {
+                            "minimum": 0,
+                        },
+                    },
+                ],
+            }
+        ],
+        "tags": [
+            "domain:sales",
+            "team:customer-success",
+            "system.certification_status:certified",
+        ],
     }
 
 
@@ -146,8 +207,8 @@ def tmp_contracts_dir(tmp_path: Path, sample_contract_data: dict[str, Any]) -> P
     with open(contracts_dir / "orders.yaml", "w") as f:
         yaml.dump(contract2, f)
 
-    # Create invalid contract
+    # Create invalid contract (invalid status value)
     with open(contracts_dir / "invalid.yaml", "w") as f:
-        yaml.dump({"name": "missing fields"}, f)
+        yaml.dump({"name": "invalid_contract", "status": "not_a_valid_status"}, f)
 
     return contracts_dir

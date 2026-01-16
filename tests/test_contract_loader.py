@@ -35,8 +35,9 @@ class TestContractLoader:
     def test_load_one_validation_error(self, tmp_path: Path) -> None:
         """Test loading contract with validation errors."""
         invalid_file = tmp_path / "invalid_contract.yaml"
+        # Use an invalid status value to trigger validation error
         with open(invalid_file, "w") as f:
-            yaml.dump({"name": "test", "extra": "field"}, f)
+            yaml.dump({"name": "test", "status": "not_a_valid_status"}, f)
 
         loader = ContractLoader()
         with pytest.raises(ContractLoadError) as exc_info:
@@ -96,8 +97,9 @@ class TestContractLoader:
     def test_validate_file_invalid(self, tmp_path: Path) -> None:
         """Test validating an invalid file."""
         invalid_file = tmp_path / "invalid.yaml"
+        # Use an invalid status value to trigger validation error
         with open(invalid_file, "w") as f:
-            yaml.dump({"invalid": "contract"}, f)
+            yaml.dump({"name": "test", "status": "invalid_status"}, f)
 
         loader = ContractLoader()
         is_valid, errors = loader.validate_file(invalid_file)

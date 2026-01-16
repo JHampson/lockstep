@@ -42,7 +42,8 @@ class TestValidateCommand:
     def test_validate_invalid_contract(self, tmp_path: Path) -> None:
         """Test validating an invalid contract file."""
         invalid_file = tmp_path / "invalid.yaml"
-        invalid_file.write_text("name: missing_required_fields\n")
+        # Use invalid status value to trigger validation error
+        invalid_file.write_text("name: test_contract\nstatus: not_a_valid_status\n")
 
         result = runner.invoke(app, ["validate", str(invalid_file)])
         assert result.exit_code == 1
@@ -72,7 +73,8 @@ class TestFromFileCommand:
     def test_from_file_invalid_contract(self, tmp_path: Path) -> None:
         """Test from-file with invalid contract."""
         invalid_file = tmp_path / "invalid.yaml"
-        invalid_file.write_text("name: missing_required_fields\n")
+        # Use invalid status value to trigger validation error
+        invalid_file.write_text("name: test_contract\nstatus: not_a_valid_status\n")
 
         result = runner.invoke(app, ["from-file", str(invalid_file), "--no-oauth"])
         assert result.exit_code == 1

@@ -203,7 +203,7 @@ class TestDiffService:
         # Contract wants certified (via tag)
         contract = Contract(
             name="test",
-            table_info=TableInfo(catalog="main", schema="default", table="test"),
+            dataset=TableInfo(catalog="main", schema="default", table="test"),
             schema_def=ContractSchema(columns=[]),
             tags={"system.certification_status": "certified"},
         )
@@ -231,7 +231,7 @@ class TestDiffService:
         # Contract wants no certification (no tag)
         contract = Contract(
             name="test",
-            table_info=TableInfo(catalog="main", schema="default", table="test"),
+            dataset=TableInfo(catalog="main", schema="default", table="test"),
             schema_def=ContractSchema(columns=[]),
             tags={},
         )

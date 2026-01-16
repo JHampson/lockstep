@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ContractStatus(str, Enum):
@@ -41,6 +41,7 @@ class DataType(str, Enum):
     ARRAY = "array"
     MAP = "map"
     STRUCT = "struct"
+    NUMBER = "number"  # ODCS v3 type - maps to DOUBLE
 
 
 # Mapping from ODCS logical types to Databricks SQL types
@@ -50,6 +51,7 @@ ODCS_TO_DATABRICKS_TYPE: dict[str, str] = {
     "long": "BIGINT",
     "float": "FLOAT",
     "double": "DOUBLE",
+    "number": "DOUBLE",  # ODCS v3 'number' type
     "decimal": "DECIMAL",
     "boolean": "BOOLEAN",
     "date": "DATE",
@@ -94,6 +96,12 @@ class Column(BaseModel):
     # Additional ODCS fields that can be extended
     business_name: str | None = Field(default=None, alias="businessName")
     classification: str | None = Field(default=None, description="Data classification level")
+    # ODCS v3 logical type options (validation constraints)
+    logical_type_options: dict[str, Any] | None = Field(
+        default=None,
+        alias="logicalTypeOptions",
+        description="Validation constraints (pattern, minimum, maximum, etc.)",
+    )
 
     @field_validator("logical_type", mode="before")
     @classmethod
@@ -143,6 +151,40 @@ class ContractSchema(BaseModel):
         return []
 
 
+class Server(BaseModel):
+    """Server definition in ODCS v3 format."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    server: str | None = Field(default=None, description="Server identifier")
+    type: str | None = Field(default=None, description="Server type (e.g., databricks)")
+    host: str | None = Field(default=None, description="Server hostname")
+    catalog: str = Field(..., description="Unity Catalog name")
+    schema_name: str = Field(..., alias="schema", description="Schema/database name")
+
+
+class SchemaItem(BaseModel):
+    """Schema item in ODCS v3 format (represents a table/model)."""
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    name: str = Field(..., description="Table/model name")
+    physical_type: str | None = Field(
+        default="table",
+        alias="physicalType",
+        description="Physical type (table, view, etc.)",
+    )
+    description: str | None = Field(default=None, description="Table description")
+    properties: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Column definitions",
+    )
+    quality: list[dict[str, Any]] | None = Field(
+        default=None,
+        description="Quality rules (DQX)",
+    )
+
+
 class TableInfo(BaseModel):
     """Target table identification in Unity Catalog."""
 
@@ -158,11 +200,55 @@ class TableInfo(BaseModel):
         return f"{self.catalog}.{self.schema_name}.{self.table}"
 
 
+def parse_tags(tags_input: Any) -> dict[str, str]:
+    """Parse tags from ODCS v3 array format or dict format.
+
+    ODCS v3 uses array format: ["domain:transport", "classification:internal"]
+    Legacy format uses dict: {"domain": "transport", "classification": "internal"}
+
+    Args:
+        tags_input: Tags in either format
+
+    Returns:
+        Dictionary of tag key-value pairs
+    """
+    if tags_input is None:
+        return {}
+
+    if isinstance(tags_input, dict):
+        # Legacy dict format - ensure all values are strings
+        return {str(k): str(v) for k, v in tags_input.items()}
+
+    if isinstance(tags_input, list):
+        # ODCS v3 array format: ["key:value", ...]
+        result: dict[str, str] = {}
+        for tag in tags_input:
+            if isinstance(tag, str) and ":" in tag:
+                key, value = tag.split(":", 1)
+                result[key.strip()] = value.strip()
+            elif isinstance(tag, str):
+                # Tag without value - use empty string
+                result[tag.strip()] = ""
+        return result
+
+    return {}
+
+
 class Contract(BaseModel):
     """Root model for an ODCS YAML contract.
 
-    This model represents the core structure needed for Unity Catalog synchronization.
-    Additional ODCS fields can be added as the tool evolves.
+    Supports both ODCS v3 format and legacy formats for backward compatibility.
+    ODCS v3 uses:
+    - servers: [{catalog, schema, host, type}]
+    - schema: [{name, physicalType, properties: [...]}]
+    - tags: ["key:value", ...]
+    - description: {usage: "..."} or string
+
+    Legacy format uses:
+    - dataset: {catalog, schema, table}
+    - schema: {properties: [...]}
+    - tags: {key: "value"}
+    - description: "string"
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
@@ -181,17 +267,31 @@ class Contract(BaseModel):
         default=ContractStatus.DRAFT,
         description="Contract lifecycle status",
     )
+
+    # Description can be string or object with 'usage' field (ODCS v3)
     description: str | None = Field(default=None, description="Contract description")
 
-    # Target table info
-    table_info: TableInfo = Field(..., alias="dataset", description="Target table information")
+    # ODCS v3 servers array
+    servers: list[Server] | None = Field(
+        default=None,
+        description="Server configurations (ODCS v3 format)",
+    )
 
-    # Schema definition
-    schema_def: ContractSchema = Field(
-        ...,
+    # Legacy dataset field (for backward compatibility)
+    dataset: TableInfo | None = Field(
+        default=None,
+        description="Target table information (legacy format)",
+    )
+
+    # Schema definition - can be dict (legacy) or list (ODCS v3)
+    schema_def: ContractSchema | None = Field(
+        default=None,
         alias="schema",
         description="Schema definition with columns",
     )
+
+    # Raw schema for ODCS v3 array format (processed in model_validator)
+    _schema_items: list[SchemaItem] = []
 
     # Table-level metadata
     tags: dict[str, str] = Field(
@@ -203,10 +303,99 @@ class Contract(BaseModel):
     owner: str | None = Field(default=None, description="Data owner")
     team: str | None = Field(default=None, description="Owning team")
 
+    # Computed table info (set in validator)
+    _table_info: TableInfo | None = None
+
+    @field_validator("description", mode="before")
+    @classmethod
+    def parse_description(cls, v: Any) -> str | None:
+        """Parse description from string or ODCS v3 object format."""
+        if v is None:
+            return None
+        if isinstance(v, str):
+            return v
+        if isinstance(v, dict):
+            # ODCS v3 format: {usage: "...", ...}
+            return v.get("usage") or v.get("purpose") or str(v)
+        return str(v)
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags_field(cls, v: Any) -> dict[str, str]:
+        """Parse tags from array or dict format."""
+        return parse_tags(v)
+
+    @field_validator("schema_def", mode="before")
+    @classmethod
+    def parse_schema(cls, v: Any) -> dict[str, Any] | None:
+        """Parse schema from ODCS v3 array format or legacy dict format."""
+        if v is None:
+            return None
+
+        if isinstance(v, dict):
+            # Legacy format: {properties: [...]}
+            return v
+
+        if isinstance(v, list) and len(v) > 0:
+            # ODCS v3 format: [{name, physicalType, properties: [...]}]
+            # Extract first schema item's properties
+            first_item = v[0]
+            if isinstance(first_item, dict):
+                properties = first_item.get("properties", [])
+                return {"properties": properties}
+
+        return None
+
+    @model_validator(mode="before")
+    @classmethod
+    def extract_table_info_from_servers(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Extract table info from ODCS v3 servers + schema structure."""
+        if not isinstance(data, dict):
+            return data
+
+        # If dataset is already provided (legacy format), use it
+        if data.get("dataset"):
+            return data
+
+        # Extract from ODCS v3 servers + schema
+        servers = data.get("servers", [])
+        schema = data.get("schema", [])
+
+        if servers and isinstance(servers, list) and len(servers) > 0:
+            server = servers[0]
+            if isinstance(server, dict):
+                catalog = server.get("catalog", "")
+                schema_name = server.get("schema", "")
+
+                # Get table name from schema array
+                table_name = ""
+                if schema and isinstance(schema, list) and len(schema) > 0:
+                    first_schema = schema[0]
+                    if isinstance(first_schema, dict):
+                        table_name = first_schema.get("name", "")
+
+                if catalog and schema_name and table_name:
+                    data["dataset"] = {
+                        "catalog": catalog,
+                        "schema": schema_name,
+                        "table": table_name,
+                    }
+
+        return data
+
+    @property
+    def table_info(self) -> TableInfo:
+        """Get table info from dataset or servers."""
+        if self.dataset:
+            return self.dataset
+        raise ValueError("No table info available - check dataset or servers configuration")
+
     @property
     def columns(self) -> list[Column]:
         """Convenience accessor for columns."""
-        return self.schema_def.columns
+        if self.schema_def:
+            return self.schema_def.columns
+        return []
 
     @property
     def primary_key_columns(self) -> list[str]:
@@ -220,9 +409,10 @@ class Contract(BaseModel):
         table_prefix: str | None = None,
     ) -> str:
         """Get fully qualified table name with optional overrides."""
-        catalog = catalog_override or self.table_info.catalog
-        schema = schema_override or self.table_info.schema_name
-        table = self.table_info.table
+        info = self.table_info
+        catalog = catalog_override or info.catalog
+        schema = schema_override or info.schema_name
+        table = info.table
         if table_prefix:
             table = f"{table_prefix}{table}"
         return f"{catalog}.{schema}.{table}"

@@ -28,7 +28,7 @@ def sample_contract() -> Contract:
     """Create a sample contract for testing."""
     return Contract(
         name="test_contract",
-        table_info=TableInfo(catalog="catalog", schema="schema", table="table"),
+        dataset=TableInfo(catalog="catalog", schema="schema", table="table"),
         schema_def=ContractSchema(
             columns=[
                 Column(name="id", logicalType="string", required=True, primaryKey=True),
@@ -312,12 +312,12 @@ class TestSyncService:
         contracts = [
             Contract(
                 name="contract1",
-                table_info=TableInfo(catalog="cat", schema="sch", table="table1"),
+                dataset=TableInfo(catalog="cat", schema="sch", table="table1"),
                 schema_def=ContractSchema(columns=[Column(name="id", logicalType="string")]),
             ),
             Contract(
                 name="contract2",
-                table_info=TableInfo(catalog="cat", schema="sch", table="table2"),
+                dataset=TableInfo(catalog="cat", schema="sch", table="table2"),
                 schema_def=ContractSchema(columns=[Column(name="id", logicalType="string")]),
             ),
         ]

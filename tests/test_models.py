@@ -167,12 +167,12 @@ class TestContract:
         )
 
     def test_missing_required_field(self) -> None:
-        """Test validation error for missing required field."""
-        with pytest.raises(ValidationError) as exc_info:
-            Contract.model_validate({"name": "test"})
-        errors = exc_info.value.errors()
-        # Should have errors for missing dataset and schema
-        assert len(errors) >= 2
+        """Test that contract without table info fails at runtime."""
+        # With ODCS v3 support, dataset is optional (can use servers instead)
+        # But accessing table_info when neither dataset nor servers is set should fail
+        contract = Contract.model_validate({"name": "test", "schema": {"properties": []}})
+        with pytest.raises(ValueError, match="No table info available"):
+            _ = contract.table_info
 
     def test_extra_fields_allowed(self) -> None:
         """Test that extra fields are allowed (for extensibility)."""
@@ -186,3 +186,77 @@ class TestContract:
         contract = Contract.model_validate(data)
         assert contract.name == "test"
         # Extra fields should be accessible via model_extra
+
+    def test_odcs_v3_format(self, sample_contract_data_v3: dict[str, Any]) -> None:
+        """Test ODCS v3 format with servers and schema array."""
+        contract = Contract.model_validate(sample_contract_data_v3)
+
+        assert contract.name == "customer_contract"
+        assert contract.id == "customer-contract"
+        # Description should be extracted from object format
+        assert contract.description == "Customer data contract for sales analytics"
+
+        # Table info should be derived from servers + schema
+        assert contract.table_info.catalog == "main"
+        assert contract.table_info.schema_name == "sales"
+        assert contract.table_info.table == "customers"
+        assert contract.get_full_table_name() == "main.sales.customers"
+
+        # Columns should be extracted from schema array's properties
+        assert len(contract.columns) == 3
+        assert contract.columns[0].name == "customer_id"
+        assert contract.columns[2].name == "total_spent"
+        assert contract.columns[2].logical_type == "number"
+
+        # Tags should be parsed from array format
+        assert contract.tags["domain"] == "sales"
+        assert contract.tags["team"] == "customer-success"
+        assert contract.tags["system.certification_status"] == "certified"
+
+    def test_odcs_v3_number_type_mapping(self) -> None:
+        """Test ODCS v3 'number' type maps to DOUBLE."""
+        col = Column(name="amount", logicalType="number")
+        assert col.get_databricks_type() == "DOUBLE"
+
+    def test_odcs_v3_tags_array_format(self) -> None:
+        """Test tags parsing from ODCS v3 array format."""
+        from lockstep.models.contract import parse_tags
+
+        tags = parse_tags(["domain:sales", "pii:true", "classification:internal"])
+        assert tags == {
+            "domain": "sales",
+            "pii": "true",
+            "classification": "internal",
+        }
+
+    def test_odcs_v3_tags_without_value(self) -> None:
+        """Test tags array with tags that have no value."""
+        from lockstep.models.contract import parse_tags
+
+        tags = parse_tags(["archived", "domain:sales"])
+        assert tags == {
+            "archived": "",
+            "domain": "sales",
+        }
+
+    def test_odcs_v3_description_object_format(self) -> None:
+        """Test description parsing from ODCS v3 object format."""
+        data = {
+            "name": "test",
+            "dataset": {"catalog": "main", "schema": "default", "table": "test"},
+            "schema": {"properties": []},
+            "description": {"usage": "This is the usage description"},
+        }
+        contract = Contract.model_validate(data)
+        assert contract.description == "This is the usage description"
+
+    def test_odcs_v3_logical_type_options(self) -> None:
+        """Test logicalTypeOptions are preserved on columns."""
+        col = Column(
+            name="score",
+            logicalType="number",
+            logicalTypeOptions={"minimum": 0, "maximum": 100},
+        )
+        assert col.logical_type_options is not None
+        assert col.logical_type_options["minimum"] == 0
+        assert col.logical_type_options["maximum"] == 100
