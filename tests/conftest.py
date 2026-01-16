@@ -16,7 +16,7 @@ from lockstep.models.contract import Contract
 def sample_contract_data() -> dict[str, Any]:
     """Sample ODCS contract data for testing (legacy format)."""
     return {
-        "apiVersion": "v3.0.0",
+        "apiVersion": "v3.1.0",
         "kind": "DataContract",
         "name": "customer_contract",
         "version": "1.0.0",
@@ -70,7 +70,7 @@ def sample_contract_data() -> dict[str, Any]:
 def sample_contract_data_v3() -> dict[str, Any]:
     """Sample ODCS v3 contract data for testing (new format)."""
     return {
-        "apiVersion": "v3.0.0",
+        "apiVersion": "v3.1.0",
         "kind": "DataContract",
         "id": "customer-contract",
         "name": "customer_contract",

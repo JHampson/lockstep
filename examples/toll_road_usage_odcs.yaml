@@ -1,7 +1,7 @@
 # ODCS Contract compatible with DQX
 # Format: OpenDataContractStandard (ODCS v3.0.x)
 
-apiVersion: v3.0.0
+apiVersion: v3.1.0
 kind: DataContract
 id: toll-road-usage
 name: toll_road_usage_contract

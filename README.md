@@ -22,7 +22,7 @@ A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https:/
 │                        ODCS Data Contract (YAML)                            │
 │                                                                             │
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
-│   │  apiVersion: v3.0.0                                                 │   │
+│   │  apiVersion: v3.1.0                                                 │   │
 │   │  name: customer_contract                                            │   │
 │   │  schema:                                                            │   │
 │   │    - name: customers                                                │   │
@@ -239,7 +239,7 @@ client_secret = "your-client-secret"
 Create a file `contracts/customers.yaml`:
 
 ```yaml
-apiVersion: v3.0.0
+apiVersion: v3.1.0
 kind: DataContract
 name: customer_contract
 version: "1.0.0"
@@ -481,7 +481,7 @@ The tool supports a subset of the ODCS specification focused on Unity Catalog sy
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `apiVersion` | string | No | ODCS spec version (default: v3.0.0) |
+| `apiVersion` | string | No | ODCS spec version (default: v3.1.0) |
 | `kind` | string | No | Resource kind (default: DataContract) |
 | `name` | string | Yes | Contract name |
 | `version` | string | No | Contract version (default: 1.0.0) |

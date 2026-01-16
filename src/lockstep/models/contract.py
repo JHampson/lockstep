@@ -255,7 +255,7 @@ class Contract(BaseModel):
 
     # Contract metadata
     api_version: str = Field(
-        default="v3.0.0",
+        default="v3.1.0",
         alias="apiVersion",
         description="ODCS specification version",
     )
