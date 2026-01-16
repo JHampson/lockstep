@@ -297,8 +297,8 @@ class TestApplyCommand:
             assert options.schema_override == "test"
             assert options.table_prefix == "stg_"
 
-    def test_apply_allow_destructive(self, tmp_contract_file: Path) -> None:
-        """Test --allow-destructive flag."""
+    def test_apply_remove_columns(self, tmp_contract_file: Path) -> None:
+        """Test --remove-columns flag."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
             patch("lockstep.cli.main.SyncService") as mock_sync_cls,
@@ -327,17 +327,17 @@ class TestApplyCommand:
                     "pat",
                     "--token",
                     "test-token",
-                    "--allow-destructive",
+                    "--remove-columns",
                 ],
             )
 
             assert result.exit_code == 0
             call_args = mock_sync.sync_contracts.call_args
             options = call_args[0][1]
-            assert options.allow_destructive is True
+            assert options.remove_columns is True
 
-    def test_apply_preserve_extra_tags(self, tmp_contract_file: Path) -> None:
-        """Test --preserve-extra-tags flag."""
+    def test_apply_remove_tags(self, tmp_contract_file: Path) -> None:
+        """Test --remove-tags flag."""
         with (
             patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
             patch("lockstep.cli.main.SyncService") as mock_sync_cls,
@@ -366,14 +366,53 @@ class TestApplyCommand:
                     "pat",
                     "--token",
                     "test-token",
-                    "--preserve-extra-tags",
+                    "--remove-tags",
                 ],
             )
 
             assert result.exit_code == 0
             call_args = mock_sync.sync_contracts.call_args
             options = call_args[0][1]
-            assert options.preserve_extra_tags is True
+            assert options.remove_tags is True
+
+    def test_apply_no_add_columns(self, tmp_contract_file: Path) -> None:
+        """Test --no-add-columns flag."""
+        with (
+            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+        ):
+            mock_connector = MagicMock()
+            mock_connector.__enter__ = MagicMock(return_value=mock_connector)
+            mock_connector.__exit__ = MagicMock(return_value=None)
+            mock_connector_cls.return_value = mock_connector
+
+            mock_sync = MagicMock()
+            mock_sync.sync_contracts.return_value = [
+                SyncResult(contract_name="test", table_name="cat.sch.tbl", success=True)
+            ]
+            mock_sync_cls.return_value = mock_sync
+
+            result = runner.invoke(
+                app,
+                [
+                    "apply",
+                    str(tmp_contract_file),
+                    "--host",
+                    "https://test.databricks.com",
+                    "--sql-endpoint",
+                    "/sql/test",
+                    "--auth-type",
+                    "pat",
+                    "--token",
+                    "test-token",
+                    "--no-add-columns",
+                ],
+            )
+
+            assert result.exit_code == 0
+            call_args = mock_sync.sync_contracts.call_args
+            options = call_args[0][1]
+            assert options.add_columns is False
 
 
 class TestGetDatabricksConfig:
@@ -454,7 +493,10 @@ class TestHelpMessages:
         """Test apply help message."""
         result = runner.invoke(app, ["apply", "--help"])
         assert result.exit_code == 0
-        assert "--allow-destructive" in result.stdout
+        assert "--add-tags" in result.stdout
+        assert "--add-columns" in result.stdout
+        assert "--remove-columns" in result.stdout
+        assert "--remove-tags" in result.stdout
         assert "--catalog-override" in result.stdout
         assert "--auth-type" in result.stdout
         assert "--token" in result.stdout

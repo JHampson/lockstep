@@ -117,6 +117,54 @@ TAG_REMOVAL_ACTION_TYPES: frozenset[ActionType] = frozenset(
     }
 )
 
+# Action types for adding tags
+TAG_ADD_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.ADD_TABLE_TAG,
+        ActionType.UPDATE_TABLE_TAG,
+        ActionType.ADD_COLUMN_TAG,
+        ActionType.UPDATE_COLUMN_TAG,
+    }
+)
+
+# Action types for adding columns
+COLUMN_ADD_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.ADD_COLUMN,
+    }
+)
+
+# Action types for description updates
+DESCRIPTION_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.UPDATE_TABLE_DESCRIPTION,
+        ActionType.UPDATE_COLUMN_DESCRIPTION,
+    }
+)
+
+# Action types for constraint changes
+CONSTRAINT_ADD_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.ADD_PRIMARY_KEY,
+        ActionType.ADD_NOT_NULL,
+    }
+)
+
+# Action types for removing columns
+COLUMN_REMOVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.DROP_COLUMN,
+    }
+)
+
+# Action types for removing constraints
+CONSTRAINT_REMOVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.DROP_PRIMARY_KEY,
+        ActionType.DROP_NOT_NULL,
+    }
+)
+
 
 @dataclass
 class SyncPlan:
@@ -136,10 +184,10 @@ class SyncPlan:
         """Check if the plan contains destructive changes."""
         return any(action.action_type in DESTRUCTIVE_ACTION_TYPES for action in self.actions)
 
-    def filter_non_destructive(self) -> SyncPlan:
-        """Return a new plan with only non-destructive actions."""
+    def filter_no_add_tags(self) -> SyncPlan:
+        """Return a new plan without tag add/update actions."""
         filtered_actions = [
-            action for action in self.actions if action.action_type not in DESTRUCTIVE_ACTION_TYPES
+            action for action in self.actions if action.action_type not in TAG_ADD_ACTION_TYPES
         ]
         return SyncPlan(
             contract_name=self.contract_name,
@@ -147,10 +195,71 @@ class SyncPlan:
             actions=filtered_actions,
         )
 
-    def filter_preserve_extra_tags(self) -> SyncPlan:
+    def filter_no_add_columns(self) -> SyncPlan:
+        """Return a new plan without add column actions."""
+        filtered_actions = [
+            action for action in self.actions if action.action_type not in COLUMN_ADD_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_add_descriptions(self) -> SyncPlan:
+        """Return a new plan without description update actions."""
+        filtered_actions = [
+            action for action in self.actions if action.action_type not in DESCRIPTION_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_add_constraints(self) -> SyncPlan:
+        """Return a new plan without constraint add actions."""
+        filtered_actions = [
+            action
+            for action in self.actions
+            if action.action_type not in CONSTRAINT_ADD_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_remove_columns(self) -> SyncPlan:
+        """Return a new plan without column drop actions."""
+        filtered_actions = [
+            action
+            for action in self.actions
+            if action.action_type not in COLUMN_REMOVE_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_remove_tags(self) -> SyncPlan:
         """Return a new plan without tag removal actions."""
         filtered_actions = [
             action for action in self.actions if action.action_type not in TAG_REMOVAL_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_remove_constraints(self) -> SyncPlan:
+        """Return a new plan without constraint drop actions."""
+        filtered_actions = [
+            action
+            for action in self.actions
+            if action.action_type not in CONSTRAINT_REMOVE_ACTION_TYPES
         ]
         return SyncPlan(
             contract_name=self.contract_name,

@@ -269,42 +269,6 @@ class TestDiffService:
 class TestSyncPlan:
     """Tests for SyncPlan filtering."""
 
-    def test_filter_non_destructive(
-        self, sample_contract: Contract, sample_catalog_table: CatalogTable
-    ) -> None:
-        """Test filtering destructive actions."""
-        diff_service = DiffService()
-        plan = diff_service.compute_diff(sample_contract, sample_catalog_table)
-
-        assert plan.has_destructive_changes is True
-
-        filtered = plan.filter_non_destructive()
-        assert filtered.has_destructive_changes is False
-
-        # Should not have drop_column or remove_tag actions
-        for action in filtered.actions:
-            assert action.action_type not in (
-                ActionType.DROP_COLUMN,
-                ActionType.REMOVE_TABLE_TAG,
-                ActionType.REMOVE_COLUMN_TAG,
-            )
-
-    def test_filter_preserve_extra_tags(
-        self, sample_contract: Contract, sample_catalog_table: CatalogTable
-    ) -> None:
-        """Test filtering tag removal actions."""
-        diff_service = DiffService()
-        plan = diff_service.compute_diff(sample_contract, sample_catalog_table)
-
-        filtered = plan.filter_preserve_extra_tags()
-
-        # Should not have tag removal actions
-        for action in filtered.actions:
-            assert action.action_type not in (
-                ActionType.REMOVE_TABLE_TAG,
-                ActionType.REMOVE_COLUMN_TAG,
-            )
-
     def test_get_summary(
         self, sample_contract: Contract, sample_catalog_table: CatalogTable
     ) -> None:
@@ -316,3 +280,162 @@ class TestSyncPlan:
         assert isinstance(summary, dict)
         # Should have counts for various action types
         assert sum(summary.values()) == len(plan.actions)
+
+    def test_filter_no_add_tags(self) -> None:
+        """Test filtering out tag add/update actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+                SyncAction(ActionType.UPDATE_TABLE_TAG, "cat.sch.tbl", "Update tag"),
+                SyncAction(ActionType.ADD_COLUMN_TAG, "cat.sch.tbl.col", "Add col tag"),
+                SyncAction(ActionType.UPDATE_COLUMN_DESCRIPTION, "cat.sch.tbl.col", "Update desc"),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col", "Add column"),
+            ],
+        )
+
+        filtered = plan.filter_no_add_tags()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type not in (
+                ActionType.ADD_TABLE_TAG,
+                ActionType.UPDATE_TABLE_TAG,
+                ActionType.ADD_COLUMN_TAG,
+                ActionType.UPDATE_COLUMN_TAG,
+            )
+
+    def test_filter_no_add_columns(self) -> None:
+        """Test filtering out add column actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col1", "Add column 1"),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col2", "Add column 2"),
+                SyncAction(ActionType.UPDATE_COLUMN_DESCRIPTION, "cat.sch.tbl.col", "Update desc"),
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+            ],
+        )
+
+        filtered = plan.filter_no_add_columns()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type != ActionType.ADD_COLUMN
+
+    def test_filter_no_add_descriptions(self) -> None:
+        """Test filtering out description update actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.UPDATE_TABLE_DESCRIPTION, "cat.sch.tbl", "Update table desc"),
+                SyncAction(
+                    ActionType.UPDATE_COLUMN_DESCRIPTION, "cat.sch.tbl.col", "Update col desc"
+                ),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col", "Add column"),
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+            ],
+        )
+
+        filtered = plan.filter_no_add_descriptions()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type not in (
+                ActionType.UPDATE_TABLE_DESCRIPTION,
+                ActionType.UPDATE_COLUMN_DESCRIPTION,
+            )
+
+    def test_filter_no_add_constraints(self) -> None:
+        """Test filtering out constraint add actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.ADD_PRIMARY_KEY, "cat.sch.tbl", "Add PK"),
+                SyncAction(ActionType.ADD_NOT_NULL, "cat.sch.tbl.col", "Add NOT NULL"),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col", "Add column"),
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+            ],
+        )
+
+        filtered = plan.filter_no_add_constraints()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type not in (
+                ActionType.ADD_PRIMARY_KEY,
+                ActionType.ADD_NOT_NULL,
+            )
+
+    def test_filter_no_remove_columns(self) -> None:
+        """Test filtering out column drop actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.DROP_COLUMN, "cat.sch.tbl.col1", "Drop column"),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col2", "Add column"),
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+            ],
+        )
+
+        filtered = plan.filter_no_remove_columns()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type != ActionType.DROP_COLUMN
+
+    def test_filter_no_remove_tags(self) -> None:
+        """Test filtering out tag removal actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.REMOVE_TABLE_TAG, "cat.sch.tbl", "Remove tag"),
+                SyncAction(ActionType.REMOVE_COLUMN_TAG, "cat.sch.tbl.col", "Remove col tag"),
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col", "Add column"),
+            ],
+        )
+
+        filtered = plan.filter_no_remove_tags()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type not in (
+                ActionType.REMOVE_TABLE_TAG,
+                ActionType.REMOVE_COLUMN_TAG,
+            )
+
+    def test_filter_no_remove_constraints(self) -> None:
+        """Test filtering out constraint drop actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(ActionType.DROP_PRIMARY_KEY, "cat.sch.tbl", "Drop PK"),
+                SyncAction(ActionType.DROP_NOT_NULL, "cat.sch.tbl.col", "Drop NOT NULL"),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col", "Add column"),
+                SyncAction(ActionType.ADD_TABLE_TAG, "cat.sch.tbl", "Add tag"),
+            ],
+        )
+
+        filtered = plan.filter_no_remove_constraints()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type not in (
+                ActionType.DROP_PRIMARY_KEY,
+                ActionType.DROP_NOT_NULL,
+            )

@@ -13,7 +13,8 @@ description:
 
 tags:
   - domain:transport
-  - classification:internal
+  - classification:restricted
+  - data_steward:toll_team
 
 # Server configuration per ODCS v3 spec
 # For Databricks server type: catalog + schema are required fields

@@ -46,25 +46,36 @@ class TestSyncOptions:
         """Test default sync options."""
         options = SyncOptions()
         assert options.dry_run is False
-        assert options.allow_destructive is False
-        assert options.preserve_extra_tags is False
         assert options.catalog_override is None
         assert options.schema_override is None
         assert options.table_prefix is None
+        # ADD options default to True
+        assert options.add_tags is True
+        assert options.add_columns is True
+        assert options.add_descriptions is True
+        assert options.add_constraints is True
+        # REMOVE options default to False (safe mode)
+        assert options.remove_columns is False
+        assert options.remove_tags is False
+        assert options.remove_constraints is False
 
     def test_custom_options(self) -> None:
         """Test custom sync options."""
         options = SyncOptions(
             dry_run=True,
-            allow_destructive=True,
-            preserve_extra_tags=True,
             catalog_override="dev_catalog",
             schema_override="dev_schema",
             table_prefix="test_",
+            remove_columns=True,
+            remove_tags=True,
+            remove_constraints=True,
         )
         assert options.dry_run is True
         assert options.catalog_override == "dev_catalog"
         assert options.table_prefix == "test_"
+        assert options.remove_columns is True
+        assert options.remove_tags is True
+        assert options.remove_constraints is True
 
 
 class TestSyncResult:
@@ -197,13 +208,13 @@ class TestSyncService:
             assert result.actions_applied == 0
             mock_connector.execute.assert_not_called()
 
-    def test_sync_contract_filters_destructive(
+    def test_sync_contract_filters_remove_by_default(
         self,
         sync_service: SyncService,
         mock_connector: MagicMock,  # noqa: ARG002
         sample_contract: Contract,
     ) -> None:
-        """Test that destructive actions are filtered by default."""
+        """Test that remove actions are filtered by default (safe mode)."""
         plan_with_destructive = SyncPlan(
             contract_name="test_contract",
             table_name="catalog.schema.table",
@@ -237,13 +248,13 @@ class TestSyncService:
             # Only the non-destructive action should be applied
             assert result.actions_applied == 1
 
-    def test_sync_contract_allows_destructive(
+    def test_sync_contract_allows_remove_when_enabled(
         self,
         sync_service: SyncService,
         mock_connector: MagicMock,  # noqa: ARG002
         sample_contract: Contract,
     ) -> None:
-        """Test that destructive actions are allowed when enabled."""
+        """Test that remove actions are allowed when enabled."""
         plan_with_destructive = SyncPlan(
             contract_name="test_contract",
             table_name="catalog.schema.table",
@@ -265,7 +276,7 @@ class TestSyncService:
                 return_value=plan_with_destructive,
             ),
         ):
-            options = SyncOptions(allow_destructive=True)
+            options = SyncOptions(remove_columns=True, remove_tags=True, remove_constraints=True)
             result = sync_service.sync_contract(sample_contract, options)
 
             assert result.actions_applied == 1

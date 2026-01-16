@@ -339,9 +339,18 @@ lockstep apply PATH [OPTIONS]
 - `--client-id TEXT`: OAuth client ID (required when `--auth-type sp`)
 - `--client-secret TEXT`: OAuth client secret (required when `--auth-type sp`)
 
-**Sync Options:**
-- `--allow-destructive`: Allow destructive operations (drop columns, remove tags)
-- `--preserve-extra-tags`: Don't remove tags that exist in catalog but not in contract
+**Selective Sync - ADD Options (enabled by default):**
+- `--add-tags/--no-add-tags`: Add/update tags from contract
+- `--add-columns/--no-add-columns`: Add missing columns from contract
+- `--add-descriptions/--no-add-descriptions`: Update descriptions from contract
+- `--add-constraints/--no-add-constraints`: Add constraints (PK, NOT NULL) from contract
+
+**Selective Sync - REMOVE Options (disabled by default for safety):**
+- `--remove-columns/--no-remove-columns`: Remove columns not in contract
+- `--remove-tags/--no-remove-tags`: Remove tags not in contract
+- `--remove-constraints/--no-remove-constraints`: Remove constraints not in contract
+
+**Override Options:**
 - `--catalog-override TEXT`: Override catalog name from contracts
 - `--schema-override TEXT`: Override schema name from contracts
 - `--table-prefix TEXT`: Prefix to add to table names
@@ -368,14 +377,23 @@ lockstep apply contracts/ \
 # Apply with Personal Access Token
 lockstep apply contracts/ --auth-type pat --token "dapi..."
 
-# Allow destructive changes (column drops, tag removal)
-lockstep apply contracts/ --allow-destructive
+# Safe apply - only add/update, never remove (default)
+lockstep apply contracts/
+
+# Also remove columns not in contract
+lockstep apply contracts/ --remove-columns
+
+# Full sync - remove everything not in contract
+lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
 
 # Override catalog for dev environment
 lockstep apply contracts/ --catalog-override dev_catalog
 
-# Preserve extra tags in Unity Catalog
-lockstep apply contracts/ --preserve-extra-tags
+# Apply only tags (skip columns, descriptions, constraints)
+lockstep apply contracts/ --no-add-columns --no-add-descriptions --no-add-constraints
+
+# Apply only descriptions
+lockstep apply contracts/ --no-add-tags --no-add-columns --no-add-constraints
 ```
 
 ### `lockstep validate`

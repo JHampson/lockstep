@@ -38,11 +38,18 @@ class SyncOptions:
     """Options for sync operation."""
 
     dry_run: bool = False
-    allow_destructive: bool = False
-    preserve_extra_tags: bool = False
     catalog_override: str | None = None
     schema_override: str | None = None
     table_prefix: str | None = None
+    # Selective sync options - what to ADD (all default to True)
+    add_tags: bool = True
+    add_columns: bool = True
+    add_descriptions: bool = True
+    add_constraints: bool = True
+    # Selective sync options - what to REMOVE (all default to False for safety)
+    remove_columns: bool = False
+    remove_tags: bool = False
+    remove_constraints: bool = False
 
 
 class SyncService:
@@ -98,11 +105,28 @@ class SyncService:
             )
 
             # Apply filters based on options
-            if not options.allow_destructive:
-                plan = plan.filter_non_destructive()
+            # Filter out ADD operations if disabled
+            if not options.add_tags:
+                plan = plan.filter_no_add_tags()
 
-            if options.preserve_extra_tags:
-                plan = plan.filter_preserve_extra_tags()
+            if not options.add_columns:
+                plan = plan.filter_no_add_columns()
+
+            if not options.add_descriptions:
+                plan = plan.filter_no_add_descriptions()
+
+            if not options.add_constraints:
+                plan = plan.filter_no_add_constraints()
+
+            # Filter out REMOVE operations if disabled (default)
+            if not options.remove_columns:
+                plan = plan.filter_no_remove_columns()
+
+            if not options.remove_tags:
+                plan = plan.filter_no_remove_tags()
+
+            if not options.remove_constraints:
+                plan = plan.filter_no_remove_constraints()
 
             result.plan = plan
 

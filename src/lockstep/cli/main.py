@@ -308,11 +308,17 @@ def plan_changes(
 
     sync_options = SyncOptions(
         dry_run=True,
-        allow_destructive=True,  # Show all changes in plan
-        preserve_extra_tags=False,
         catalog_override=catalog_override,
         schema_override=schema_override,
         table_prefix=table_prefix,
+        # Show ALL potential changes in plan (both add and remove)
+        add_tags=True,
+        add_columns=True,
+        add_descriptions=True,
+        add_constraints=True,
+        remove_columns=True,
+        remove_tags=True,
+        remove_constraints=True,
     )
 
     try:
@@ -359,18 +365,53 @@ def apply_contracts(
     token: Annotated[str | None, _token_option] = None,
     client_id: Annotated[str | None, _client_id_option] = None,
     client_secret: Annotated[str | None, _client_secret_option] = None,
-    allow_destructive: Annotated[
+    add_tags: Annotated[
         bool,
         typer.Option(
-            "--allow-destructive",
-            help="Allow destructive operations (drop columns, remove tags).",
+            "--add-tags/--no-add-tags",
+            help="Add/update tags from contract (default: enabled).",
+        ),
+    ] = True,
+    add_columns: Annotated[
+        bool,
+        typer.Option(
+            "--add-columns/--no-add-columns",
+            help="Add missing columns from contract (default: enabled).",
+        ),
+    ] = True,
+    add_descriptions: Annotated[
+        bool,
+        typer.Option(
+            "--add-descriptions/--no-add-descriptions",
+            help="Update descriptions from contract (default: enabled).",
+        ),
+    ] = True,
+    add_constraints: Annotated[
+        bool,
+        typer.Option(
+            "--add-constraints/--no-add-constraints",
+            help="Add constraints (PK, NOT NULL) from contract (default: enabled).",
+        ),
+    ] = True,
+    remove_columns: Annotated[
+        bool,
+        typer.Option(
+            "--remove-columns/--no-remove-columns",
+            help="Remove columns not in contract (default: disabled).",
         ),
     ] = False,
-    preserve_extra_tags: Annotated[
+    remove_tags: Annotated[
         bool,
         typer.Option(
-            "--preserve-extra-tags",
-            help="Don't remove tags that exist in catalog but not in contract.",
+            "--remove-tags/--no-remove-tags",
+            help="Remove tags not in contract (default: disabled).",
+        ),
+    ] = False,
+    remove_constraints: Annotated[
+        bool,
+        typer.Option(
+            "--remove-constraints/--no-remove-constraints",
+            help="Remove constraints not in contract (default: disabled).",
         ),
     ] = False,
     catalog_override: Annotated[str | None, _catalog_override_option] = None,
@@ -382,30 +423,35 @@ def apply_contracts(
 ) -> None:
     """Apply ODCS contract(s) to Unity Catalog.
 
-    This command will:
-    - Create tables if they don't exist
-    - Add missing columns to existing tables
-    - Update descriptions for tables and columns
-    - Manage tags (add, update, remove)
-    - Set primary key and not null constraints
+    By default, this command will ADD elements from the contract but will NOT
+    remove anything from Unity Catalog (safe mode).
 
-    Use 'lockstep plan' first to preview changes.
+    ADD operations (enabled by default):
+    - Add missing columns (--add-columns)
+    - Update descriptions (--add-descriptions)
+    - Add/update tags (--add-tags)
+    - Add constraints like PK and NOT NULL (--add-constraints)
 
-    Authentication types:
-    - oauth: Interactive OAuth via Databricks CLI, Azure CLI, etc. (default)
-    - pat: Personal Access Token (requires --token)
-    - sp: Service Principal / OAuth M2M (requires --client-id and --client-secret)
+    REMOVE operations (disabled by default for safety):
+    - Remove columns not in contract (--remove-columns)
+    - Remove tags not in contract (--remove-tags)
+    - Remove constraints not in contract (--remove-constraints)
+
+    Use 'lockstep plan' first to preview all potential changes.
 
     Examples:
 
-        # Apply using OAuth (default)
+        # Safe apply - only add/update, never remove (default)
         $ lockstep apply contracts/
 
-        # Apply using Service Principal
-        $ lockstep apply contracts/ --auth-type sp --client-id "..." --client-secret "..."
+        # Also remove columns not in contract
+        $ lockstep apply contracts/ --remove-columns
 
-        # Allow destructive changes
-        $ lockstep apply contracts/ --allow-destructive
+        # Full sync - remove everything not in contract
+        $ lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
+
+        # Only sync tags
+        $ lockstep apply contracts/ --no-add-columns --no-add-descriptions --no-add-constraints
     """
     _setup_logging(verbose, quiet)
 
@@ -416,11 +462,16 @@ def apply_contracts(
 
     sync_options = SyncOptions(
         dry_run=False,
-        allow_destructive=allow_destructive,
-        preserve_extra_tags=preserve_extra_tags,
         catalog_override=catalog_override,
         schema_override=schema_override,
         table_prefix=table_prefix,
+        add_tags=add_tags,
+        add_columns=add_columns,
+        add_descriptions=add_descriptions,
+        add_constraints=add_constraints,
+        remove_columns=remove_columns,
+        remove_tags=remove_tags,
+        remove_constraints=remove_constraints,
     )
 
     try:
