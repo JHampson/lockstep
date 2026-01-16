@@ -9,8 +9,57 @@ A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https:/
 - **Tag Synchronization**: Create, update, and remove tags on tables and columns
 - **Certification**: Manage Unity Catalog certification via `system.certification_status` tag
 - **Idempotent Operations**: Safe to run multiple times - only applies necessary changes
-- **Dry Run Mode**: Preview changes before applying them
+- **Plan & Apply Workflow**: Preview changes with `plan`, apply with `apply` (similar to Terraform)
+- **Granular Control**: Fine-grained `--add-*` and `--remove-*` options for selective sync
+- **Multi-Workspace Support**: Apply a single contract to multiple Databricks workspaces
+- **JUnit XML Reports**: Generate CI/CD-compatible test reports for validation and drift detection
 - **Rich CLI Output**: Beautiful, informative terminal output
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        ODCS Data Contract (YAML)                            │
+│                                                                             │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │  apiVersion: v3.0.0                                                 │   │
+│   │  name: customer_contract                                            │   │
+│   │  schema:                                                            │   │
+│   │    - name: customers                                                │   │
+│   │      properties:                                                    │   │
+│   │        - name: customer_id                                          │   │
+│   │          logicalType: string                                        │   │
+│   │          primaryKey: true                                           │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│                                    ▼                                        │
+│                            ┌──────────────┐                                 │
+│                            │   Lockstep   │                                 │
+│                            │     CLI      │                                 │
+│                            └──────┬───────┘                                 │
+│                                   │                                         │
+│          ┌────────────────────────┼────────────────────────┐                │
+│          │                        │                        │                │
+│          ▼                        ▼                        ▼                │
+│  ┌───────────────┐       ┌───────────────┐       ┌───────────────┐          │
+│  │  Development  │       │   Staging     │       │  Production   │          │
+│  │   Workspace   │       │   Workspace   │       │   Workspace   │          │
+│  │               │       │               │       │               │          │
+│  │ --catalog-    │       │ --catalog-    │       │ (default      │          │
+│  │ override dev  │       │ override stg  │       │  catalog)     │          │
+│  └───────────────┘       └───────────────┘       └───────────────┘          │
+│        AWS                    Azure                   Azure                 │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                    One Contract → Multiple Workspaces
+```
+
+**Key Benefits:**
+- **Single Source of Truth**: Define your schema once in a version-controlled contract
+- **Environment Promotion**: Use `--catalog-override` and `--schema-override` for dev/staging/prod
+- **Cross-Cloud**: Works with both AWS and Azure Databricks workspaces
+- **CI/CD Integration**: Automate drift detection and deployment across all environments
 
 ## Installation
 
@@ -490,28 +539,39 @@ The tool is designed to be idempotent - running the same contract multiple times
 
 ### Default Behavior (Safe Mode)
 
-By default, the tool will:
-- ✅ Create tables if they don't exist
-- ✅ Add missing columns
-- ✅ Update descriptions
-- ✅ Add missing tags
-- ✅ Update tag values
-- ✅ Set constraints (PK, NOT NULL)
-- ✅ Set certification status
-- ❌ NOT drop columns (requires `--allow-destructive`)
-- ❌ NOT remove tags (requires `--allow-destructive` or omit `--preserve-extra-tags`)
+By default, the tool will **ADD** but not **REMOVE**:
 
-### Destructive Mode
+| Operation | Default | Flag to Change |
+|-----------|---------|----------------|
+| Create tables | ✅ Always | - |
+| Add columns | ✅ Enabled | `--no-add-columns` |
+| Update descriptions | ✅ Enabled | `--no-add-descriptions` |
+| Add/update tags | ✅ Enabled | `--no-add-tags` |
+| Add constraints | ✅ Enabled | `--no-add-constraints` |
+| Drop columns | ❌ Disabled | `--remove-columns` |
+| Remove tags | ❌ Disabled | `--remove-tags` |
+| Remove constraints | ❌ Disabled | `--remove-constraints` |
 
-With `--allow-destructive`:
-- ✅ Drop columns not in contract
-- ✅ Remove tags not in contract
-- ✅ Drop constraints not in contract
+### Full Sync Mode
 
-### Tag Preservation
+To fully synchronize Unity Catalog with the contract (including removals):
 
-With `--preserve-extra-tags`:
-- Tags in Unity Catalog but not in contract will be kept
+```bash
+lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
+```
+
+### Selective Sync Examples
+
+```bash
+# Only sync tags (no columns, descriptions, or constraints)
+lockstep apply contracts/ --no-add-columns --no-add-descriptions --no-add-constraints
+
+# Only sync descriptions
+lockstep apply contracts/ --no-add-tags --no-add-columns --no-add-constraints
+
+# Add tags but also remove tags not in contract
+lockstep apply contracts/ --remove-tags
+```
 
 ## Exit Codes
 
@@ -522,6 +582,39 @@ The CLI uses specific exit codes for CI/CD integration:
 | **0** | Success - no changes needed (in sync) |
 | **1** | Error - sync failed, connection error, or validation error |
 | **2** | Drift detected (`lockstep plan` only) |
+
+## JUnit XML Reports
+
+All commands support JUnit XML output for CI/CD integration via the `--junit-xml` flag:
+
+```bash
+# Validation report
+lockstep validate contracts/ --junit-xml reports/validation.xml
+
+# Drift detection report  
+lockstep plan contracts/ --junit-xml reports/drift.xml
+
+# Apply results report
+lockstep apply contracts/ --junit-xml reports/apply.xml
+```
+
+The JUnit XML format is compatible with:
+- **GitHub Actions**: Use `EnricoMi/publish-unit-test-result-action`
+- **Azure DevOps**: Built-in test results publishing
+- **Jenkins**: JUnit plugin
+- **GitLab CI**: Built-in JUnit report support
+
+Example report structure:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="lockstep" tests="1" failures="0" errors="0">
+  <testsuite name="drift-check" tests="1" failures="0">
+    <testcase name="customer_contract" classname="contracts">
+      <system-out>No changes needed</system-out>
+    </testcase>
+  </testsuite>
+</testsuites>
+```
 
 ### CI/CD Drift Detection
 
@@ -880,26 +973,27 @@ make typecheck # Run mypy
 make all       # Run all checks
 ```
 
-## Architecture
+## Code Architecture
 
 ```
 src/lockstep/
 ├── __init__.py
-├── models/           # Pydantic models
-│   ├── contract.py   # ODCS contract models
-│   └── catalog_state.py  # Unity Catalog state models
-├── databricks/       # Databricks connectivity
-│   ├── config.py     # Configuration handling
-│   └── connector.py  # SQL connector
-├── services/         # Business logic
-│   ├── contract_loader.py  # YAML loading/validation
-│   ├── introspection.py    # Catalog state fetching
+├── models/                # Pydantic models
+│   ├── contract.py        # ODCS contract models
+│   └── catalog_state.py   # Unity Catalog state models
+├── databricks/            # Databricks connectivity
+│   ├── config.py          # Configuration handling
+│   └── connector.py       # SQL connector
+├── services/              # Business logic
+│   ├── contract_loader.py # YAML loading/validation
+│   ├── introspection.py   # Catalog state fetching
 │   ├── diff.py            # Contract vs catalog diffing
 │   ├── sql_generator.py   # SQL generation
 │   └── sync.py            # Orchestration
-└── cli/              # CLI interface
-    ├── main.py       # Typer commands
-    └── formatters.py # Output formatting
+└── cli/                   # CLI interface
+    ├── main.py            # Typer commands
+    ├── formatters.py      # Rich terminal output
+    └── junit_reporter.py  # JUnit XML generation
 ```
 
 ## Extending
