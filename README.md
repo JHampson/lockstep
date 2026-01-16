@@ -42,23 +42,23 @@ A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https:/
 │          │                        │                        │                │
 │          ▼                        ▼                        ▼                │
 │  ┌───────────────┐       ┌───────────────┐       ┌───────────────┐          │
-│  │  Development  │       │   Staging     │       │  Production   │          │
+│  │  Development  │       │    Staging    │       │  Production   │          │
 │  │   Workspace   │       │   Workspace   │       │   Workspace   │          │
 │  │               │       │               │       │               │          │
 │  │ --catalog-    │       │ --catalog-    │       │ (default      │          │
 │  │ override dev  │       │ override stg  │       │  catalog)     │          │
 │  └───────────────┘       └───────────────┘       └───────────────┘          │
-│        AWS                    Azure                   Azure                 │
+│        AWS                     Azure                  Azure                 │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-                    One Contract → Multiple Workspaces
+                    One Contract → Multiple Workspaces & Clouds
 ```
 
 **Key Benefits:**
 - **Single Source of Truth**: Define your schema once in a version-controlled contract
 - **Environment Promotion**: Use `--catalog-override` and `--schema-override` for dev/staging/prod
-- **Cross-Cloud**: Works with both AWS and Azure Databricks workspaces
+- **Cross-Cloud**: Works with AWS, Azure, and GCP Databricks workspaces
 - **CI/CD Integration**: Automate drift detection and deployment across all environments
 
 ## Installation
@@ -128,7 +128,7 @@ uv run pyinstaller --onefile --name lockstep --clean src/lockstep/cli/main.py
 
 ## Authentication
 
-The tool supports multiple authentication methods for both **AWS** and **Azure** Databricks via the `--auth-type` argument.
+The tool supports multiple authentication methods for **AWS**, **Azure**, and **GCP** Databricks via the `--auth-type` argument.
 
 **Precedence order:** CLI parameters → Environment variables → Config file
 
@@ -156,7 +156,7 @@ lockstep apply contracts/ \
 
 ### Service Principal (Recommended for CI/CD)
 
-Works on both AWS and Azure Databricks:
+Works on AWS, Azure, and GCP Databricks:
 
 ```bash
 lockstep apply contracts/ \
