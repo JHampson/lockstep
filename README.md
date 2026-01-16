@@ -344,6 +344,12 @@ lockstep plan PATH [OPTIONS]
 - `--schema-override TEXT`: Override schema name from contracts
 - `--table-prefix TEXT`: Prefix to add to table names
 
+**Ignore Options (exclude from plan output):**
+- `--ignore-tags`: Exclude tag changes from the plan
+- `--ignore-columns`: Exclude column changes from the plan
+- `--ignore-descriptions`: Exclude description changes from the plan
+- `--ignore-constraints`: Exclude constraint changes from the plan
+
 **Output Options:**
 - `--verbose, -v`: Enable verbose output
 - `--quiet, -q`: Suppress non-error output
@@ -362,6 +368,12 @@ lockstep plan contracts/customer.yaml
 
 # Preview changes for all contracts
 lockstep plan contracts/
+
+# Ignore tag changes in the plan
+lockstep plan contracts/ --ignore-tags
+
+# Only show column changes (ignore everything else)
+lockstep plan contracts/ --ignore-tags --ignore-descriptions --ignore-constraints
 
 # Output results as JUnit XML for CI/CD
 lockstep plan contracts/ --junit-xml reports/drift.xml

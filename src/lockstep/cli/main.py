@@ -266,6 +266,34 @@ def plan_changes(
     token: Annotated[str | None, _token_option] = None,
     client_id: Annotated[str | None, _client_id_option] = None,
     client_secret: Annotated[str | None, _client_secret_option] = None,
+    ignore_tags: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-tags",
+            help="Exclude tag changes from the plan.",
+        ),
+    ] = False,
+    ignore_columns: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-columns",
+            help="Exclude column changes from the plan.",
+        ),
+    ] = False,
+    ignore_descriptions: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-descriptions",
+            help="Exclude description changes from the plan.",
+        ),
+    ] = False,
+    ignore_constraints: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-constraints",
+            help="Exclude constraint changes from the plan.",
+        ),
+    ] = False,
     catalog_override: Annotated[str | None, _catalog_override_option] = None,
     schema_override: Annotated[str | None, _schema_override_option] = None,
     table_prefix: Annotated[str | None, _table_prefix_option] = None,
@@ -277,6 +305,8 @@ def plan_changes(
 
     Compares contracts against Unity Catalog and displays the differences.
     No changes are made to Unity Catalog.
+
+    Use --ignore-* flags to exclude certain change types from the plan output.
 
     Authentication types:
     - oauth: Interactive OAuth via Databricks CLI, Azure CLI, etc. (default)
@@ -290,14 +320,14 @@ def plan_changes(
 
     Examples:
 
-        # Using OAuth (default)
+        # Show all changes (default)
         $ lockstep plan contracts/
 
-        # Using Personal Access Token
-        $ lockstep plan contracts/ --auth-type pat --token "dapi..."
+        # Ignore tag changes
+        $ lockstep plan contracts/ --ignore-tags
 
-        # Using Service Principal
-        $ lockstep plan contracts/ --auth-type sp --client-id "..." --client-secret "..."
+        # Only show column changes
+        $ lockstep plan contracts/ --ignore-tags --ignore-descriptions --ignore-constraints
     """
     _setup_logging(verbose, quiet)
 
@@ -311,14 +341,14 @@ def plan_changes(
         catalog_override=catalog_override,
         schema_override=schema_override,
         table_prefix=table_prefix,
-        # Show ALL potential changes in plan (both add and remove)
-        add_tags=True,
-        add_columns=True,
-        add_descriptions=True,
-        add_constraints=True,
-        remove_columns=True,
-        remove_tags=True,
-        remove_constraints=True,
+        # Show changes based on ignore flags
+        add_tags=not ignore_tags,
+        add_columns=not ignore_columns,
+        add_descriptions=not ignore_descriptions,
+        add_constraints=not ignore_constraints,
+        remove_columns=not ignore_columns,
+        remove_tags=not ignore_tags,
+        remove_constraints=not ignore_constraints,
     )
 
     try:
