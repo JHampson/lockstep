@@ -360,6 +360,9 @@ lockstep plan PATH [OPTIONS]
 - `1`: Error occurred
 - `2`: Changes detected (drift)
 
+**Plan Output:**
+- `--out, -o PATH`: Save the plan to a JSON file for later apply
+
 **Examples:**
 
 ```bash
@@ -368,6 +371,9 @@ lockstep plan contracts/customer.yaml
 
 # Preview changes for all contracts
 lockstep plan contracts/
+
+# Save plan to file for later apply
+lockstep plan contracts/ --out plan.json
 
 # Ignore tag changes in the plan
 lockstep plan contracts/ --ignore-tags
@@ -381,14 +387,14 @@ lockstep plan contracts/ --junit-xml reports/drift.xml
 
 ### `lockstep apply`
 
-Apply ODCS contracts to Unity Catalog.
+Apply ODCS contracts or a saved plan to Unity Catalog.
 
 ```bash
 lockstep apply PATH [OPTIONS]
 ```
 
 **Arguments:**
-- `PATH`: Path to YAML file or directory containing contract files
+- `PATH`: Path to YAML contract file/directory OR a JSON plan file from `lockstep plan --out`
 
 **Connection Options:**
 - `--host TEXT`: Databricks workspace host URL
@@ -426,6 +432,9 @@ lockstep apply PATH [OPTIONS]
 ```bash
 # Apply a single contract
 lockstep apply contracts/customer.yaml
+
+# Apply a saved plan (from 'lockstep plan --out')
+lockstep apply plan.json
 
 # Apply with Service Principal (CI/CD)
 lockstep apply contracts/ \

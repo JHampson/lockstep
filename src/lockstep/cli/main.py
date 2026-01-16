@@ -5,7 +5,9 @@ Provides commands for synchronizing data contracts to Databricks Unity Catalog.
 
 from __future__ import annotations
 
+import json
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -21,6 +23,7 @@ from lockstep.cli.junit_reporter import generate_junit_xml, generate_validation_
 from lockstep.databricks import DatabricksConfig, DatabricksConnector
 from lockstep.databricks.config import AuthType
 from lockstep.databricks.connector import DatabricksConnectionError
+from lockstep.models.catalog_state import SavedPlan
 from lockstep.models.contract import Contract
 from lockstep.services import ContractLoader, ContractLoadError, SyncService
 from lockstep.services.sync import SyncOptions
@@ -297,6 +300,14 @@ def plan_changes(
     catalog_override: Annotated[str | None, _catalog_override_option] = None,
     schema_override: Annotated[str | None, _schema_override_option] = None,
     table_prefix: Annotated[str | None, _table_prefix_option] = None,
+    out: Annotated[
+        Path | None,
+        typer.Option(
+            "--out",
+            "-o",
+            help="Save the plan to a JSON file for later apply.",
+        ),
+    ] = None,
     verbose: Annotated[bool, _verbose_option] = False,
     quiet: Annotated[bool, _quiet_option] = False,
     junit_xml: Annotated[Path | None, _junit_xml_option] = None,
@@ -307,6 +318,7 @@ def plan_changes(
     No changes are made to Unity Catalog.
 
     Use --ignore-* flags to exclude certain change types from the plan output.
+    Use --out to save the plan to a file for later apply.
 
     Authentication types:
     - oauth: Interactive OAuth via Databricks CLI, Azure CLI, etc. (default)
@@ -322,6 +334,9 @@ def plan_changes(
 
         # Show all changes (default)
         $ lockstep plan contracts/
+
+        # Save plan to file for later apply
+        $ lockstep plan contracts/ --out plan.json
 
         # Ignore tag changes
         $ lockstep plan contracts/ --ignore-tags
@@ -357,12 +372,27 @@ def plan_changes(
             results = sync_service.sync_contracts(contracts, sync_options)
 
             has_changes = False
+            plans_to_save = []
             for result in results:
                 if result.plan and result.plan.has_changes:
                     console.print(format_plan(result.plan))
                     has_changes = True
+                    plans_to_save.append(result.plan)
                 else:
                     console.print(f"[dim]No changes needed for {result.table_name}[/dim]")
+
+            # Save plan to file if requested
+            if out and plans_to_save:
+                saved_plan = SavedPlan(
+                    version="1.0",
+                    created_at=datetime.now(UTC).isoformat(),
+                    host=config.host,
+                    plans=plans_to_save,
+                )
+                with open(out, "w") as f:
+                    json.dump(saved_plan.to_dict(), f, indent=2)
+                console.print(f"\n[green]✓[/green] Plan saved to: {out}")
+                console.print(f"[dim]Apply this plan with: lockstep apply {out}[/dim]")
 
             # Generate JUnit XML if requested
             if junit_xml:
@@ -380,6 +410,103 @@ def plan_changes(
                 raise typer.Exit(2)
             else:
                 console.print("\n[green]✓ All contracts are in sync with Unity Catalog.[/green]")
+
+    except DatabricksConnectionError as e:
+        error_console.print(f"\n[red]❌ Connection error:[/red] {e}")
+        raise typer.Exit(1) from None
+
+
+def _apply_saved_plan(
+    plan_path: Path,
+    host: str | None,
+    http_path: str | None,
+    auth_type: str | None,
+    token: str | None,
+    client_id: str | None,
+    client_secret: str | None,
+    verbose: bool,  # noqa: ARG001
+    quiet: bool,  # noqa: ARG001
+    junit_xml: Path | None,
+) -> None:
+    """Apply a saved plan file to Unity Catalog."""
+    console.print(f"\n[bold]Loading plan from:[/bold] {plan_path}")
+
+    try:
+        with open(plan_path) as f:
+            plan_data = json.load(f)
+        saved_plan = SavedPlan.from_dict(plan_data)
+    except (json.JSONDecodeError, KeyError) as e:
+        error_console.print(f"[red]❌ Invalid plan file:[/red] {e}")
+        raise typer.Exit(1) from None
+
+    console.print(f"[dim]Plan created: {saved_plan.created_at}[/dim]")
+    console.print(f"[dim]Original host: {saved_plan.host}[/dim]")
+    console.print(f"[dim]Plans: {len(saved_plan.plans)}, Actions: {saved_plan.total_actions}[/dim]")
+
+    if not saved_plan.has_changes:
+        console.print("\n[green]✓ Plan has no changes to apply.[/green]")
+        return
+
+    # Use host from plan if not overridden
+    effective_host = host or saved_plan.host
+    if not effective_host:
+        error_console.print(
+            "[red]❌ No host specified. Use --host or ensure the plan contains a host.[/red]"
+        )
+        raise typer.Exit(1) from None
+
+    config = _ensure_databricks_config(
+        effective_host, http_path, auth_type, token, client_id, client_secret
+    )
+
+    try:
+        with DatabricksConnector(config) as connector:
+            total_applied = 0
+            total_failed = 0
+            results_for_junit = []
+
+            for plan in saved_plan.plans:
+                console.print(f"\n[bold]Applying plan for:[/bold] {plan.table_name}")
+
+                for action in plan.actions:
+                    if action.sql:
+                        try:
+                            connector.execute(action.sql)
+                            console.print(f"  [green]✓[/green] {action.description}")
+                            total_applied += 1
+                        except Exception as e:
+                            console.print(f"  [red]✗[/red] {action.description}: {e}")
+                            total_failed += 1
+                    else:
+                        console.print(f"  [yellow]⚠[/yellow] {action.description} (no SQL)")
+
+                # Create a mock result for JUnit reporting
+                from lockstep.services.sync import SyncResult
+
+                results_for_junit.append(
+                    SyncResult(
+                        contract_name=plan.contract_name,
+                        table_name=plan.table_name,
+                        success=total_failed == 0,
+                        actions_applied=total_applied,
+                        plan=plan,
+                    )
+                )
+
+            # Summary
+            console.print(f"\n[bold]Summary:[/bold] {total_applied} applied, {total_failed} failed")
+
+            # Generate JUnit XML if requested
+            if junit_xml:
+                generate_junit_xml(
+                    results=results_for_junit,
+                    check_mode=False,
+                    output_path=junit_xml,
+                )
+                console.print(f"[green]✓[/green] JUnit XML report written to: {junit_xml}")
+
+            if total_failed > 0:
+                raise typer.Exit(1) from None
 
     except DatabricksConnectionError as e:
         error_console.print(f"\n[red]❌ Connection error:[/red] {e}")
@@ -451,9 +578,13 @@ def apply_contracts(
     quiet: Annotated[bool, _quiet_option] = False,
     junit_xml: Annotated[Path | None, _junit_xml_option] = None,
 ) -> None:
-    """Apply ODCS contract(s) to Unity Catalog.
+    """Apply ODCS contract(s) or a saved plan to Unity Catalog.
 
-    By default, this command will ADD elements from the contract but will NOT
+    PATH can be:
+    - A YAML contract file or directory of contracts
+    - A JSON plan file created by 'lockstep plan --out'
+
+    When applying contracts, by default this command will ADD elements but will NOT
     remove anything from Unity Catalog (safe mode).
 
     ADD operations (enabled by default):
@@ -467,23 +598,37 @@ def apply_contracts(
     - Remove tags not in contract (--remove-tags)
     - Remove constraints not in contract (--remove-constraints)
 
-    Use 'lockstep plan' first to preview all potential changes.
+    Note: When applying a saved plan file, --add-* and --remove-* flags are ignored
+    as the plan already contains the specific actions to apply.
 
     Examples:
 
-        # Safe apply - only add/update, never remove (default)
+        # Apply contracts (default safe mode)
         $ lockstep apply contracts/
 
-        # Also remove columns not in contract
-        $ lockstep apply contracts/ --remove-columns
+        # Apply a saved plan
+        $ lockstep apply plan.json
 
         # Full sync - remove everything not in contract
         $ lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
-
-        # Only sync tags
-        $ lockstep apply contracts/ --no-add-columns --no-add-descriptions --no-add-constraints
     """
     _setup_logging(verbose, quiet)
+
+    # Check if path is a saved plan file (JSON)
+    if path.suffix.lower() == ".json" and path.is_file():
+        _apply_saved_plan(
+            path,
+            host,
+            http_path,
+            auth_type,
+            token,
+            client_id,
+            client_secret,
+            verbose,
+            quiet,
+            junit_xml,
+        )
+        return
 
     loader = ContractLoader()
     contracts = _load_contracts(path, loader)

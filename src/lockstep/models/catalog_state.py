@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class ActionType(str, Enum):
@@ -96,6 +97,27 @@ class SyncAction:
 
     def __str__(self) -> str:
         return f"[{self.action_type.value}] {self.description}"
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize action to dictionary."""
+        return {
+            "action_type": self.action_type.value,
+            "target": self.target,
+            "description": self.description,
+            "sql": self.sql,
+            "details": self.details,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SyncAction:
+        """Deserialize action from dictionary."""
+        return cls(
+            action_type=ActionType(data["action_type"]),
+            target=data["target"],
+            description=data["description"],
+            sql=data.get("sql"),
+            details=data.get("details", {}),
+        )
 
 
 # Action types that are considered destructive (data loss or breaking changes)
@@ -274,3 +296,59 @@ class SyncPlan:
             key = action.action_type.value
             summary[key] = summary.get(key, 0) + 1
         return summary
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize plan to dictionary."""
+        return {
+            "contract_name": self.contract_name,
+            "table_name": self.table_name,
+            "actions": [action.to_dict() for action in self.actions],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SyncPlan:
+        """Deserialize plan from dictionary."""
+        return cls(
+            contract_name=data["contract_name"],
+            table_name=data["table_name"],
+            actions=[SyncAction.from_dict(a) for a in data.get("actions", [])],
+        )
+
+
+@dataclass
+class SavedPlan:
+    """A saved plan file containing one or more sync plans."""
+
+    version: str = "1.0"
+    created_at: str = ""
+    host: str = ""
+    plans: list[SyncPlan] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize saved plan to dictionary."""
+        return {
+            "version": self.version,
+            "created_at": self.created_at,
+            "host": self.host,
+            "plans": [plan.to_dict() for plan in self.plans],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SavedPlan:
+        """Deserialize saved plan from dictionary."""
+        return cls(
+            version=data.get("version", "1.0"),
+            created_at=data.get("created_at", ""),
+            host=data.get("host", ""),
+            plans=[SyncPlan.from_dict(p) for p in data.get("plans", [])],
+        )
+
+    @property
+    def total_actions(self) -> int:
+        """Total number of actions across all plans."""
+        return sum(len(plan.actions) for plan in self.plans)
+
+    @property
+    def has_changes(self) -> bool:
+        """Check if there are any changes in any plan."""
+        return any(plan.has_changes for plan in self.plans)
