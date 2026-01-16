@@ -36,6 +36,8 @@ ACTION_STYLES = {
     "drop_primary_key": ("🔑", "red"),
     "add_not_null": ("❗", "green"),
     "drop_not_null": ("❗", "red"),
+    # Warning actions (no SQL, informational only)
+    "type_mismatch": ("⚠️", "yellow bold"),
 }
 
 
@@ -78,6 +80,9 @@ def format_plan(plan: SyncPlan) -> Panel:
     summary = plan.get_summary()
     summary_parts = [f"{count} {action_type}" for action_type, count in summary.items()]
     summary_text = f"\n[bold]Summary:[/bold] {', '.join(summary_parts)}"
+
+    if plan.has_warnings:
+        summary_text += "\n[yellow bold]⚠️  Plan contains type mismatches requiring manual intervention[/yellow bold]"
 
     if plan.has_destructive_changes:
         summary_text += "\n[yellow]⚠️  Plan contains destructive changes[/yellow]"

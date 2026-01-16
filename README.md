@@ -2,12 +2,17 @@
 
 A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https://bitol-io.github.io/open-data-contract-standard/) YAML specifications to Databricks Unity Catalog.
 
+## Use Cases
+ - Detect diffrences between a ODCS v3 contract specification and a Unity Catalog implementation (Tags, Descriptions, Columns, Constraints)
+ - Synchronise Unity Catalog to match the data contact (Tags, Descriptions, Columns, Constraints)
+
 ## Features
 
 - **Table Management**: Create tables, add columns, update descriptions
 - **Constraint Handling**: Set primary key and NOT NULL constraints (informational)
 - **Tag Synchronization**: Create, update, and remove tags on tables and columns
 - **Certification**: Manage Unity Catalog certification via `system.certification_status` tag
+- **Type Mismatch Detection**: Warns when column types differ between contract and catalog
 - **Idempotent Operations**: Safe to run multiple times - only applies necessary changes
 - **Plan & Apply Workflow**: Preview changes with `plan`, apply with `apply` (similar to Terraform)
 - **Granular Control**: Fine-grained `--add-*` and `--remove-*` options for selective sync
@@ -603,6 +608,54 @@ The CLI uses specific exit codes for CI/CD integration:
 | **0** | Success - no changes needed (in sync) |
 | **1** | Error - sync failed, connection error, or validation error |
 | **2** | Drift detected (`lockstep plan` only) |
+
+## Type Mismatch Detection
+
+When running `lockstep plan`, the tool detects column data type mismatches between your contract and Unity Catalog. These are shown as **warnings** because changing column types requires manual intervention (data migration, potential data loss).
+
+### Example Output
+
+```
+╭───── 📋 customer_contract → main.sales.customers ──────╮
+│       Action         Target                Details     │
+│  ⚠️    Type Mismatch  main.sales.customer…  column=id, │
+│                                           contract_   │
+│                                           type=INT,   │
+│                                           catalog_    │
+│                                           type=STRING │
+│                                                       │
+│ Summary: 1 type_mismatch                              │
+│ ⚠️  Plan contains type mismatches requiring manual    │
+│    intervention                                       │
+╰───────────────────────────────────────────────────────╯
+```
+
+### Type Equivalence
+
+Lockstep recognizes common type aliases as equivalent **only when neither has parameters**:
+
+| No Warning (Equivalent) | Warning (Different) |
+|------------------------|---------------------|
+| `STRING` ↔ `VARCHAR` | `STRING` ↔ `VARCHAR(100)` |
+| `STRING` ↔ `TEXT` | `VARCHAR(100)` ↔ `VARCHAR(200)` |
+| `INT` ↔ `INTEGER` | `DECIMAL` ↔ `DECIMAL(10,2)` |
+| `LONG` ↔ `BIGINT` | `INT` ↔ `STRING` |
+| `BOOLEAN` ↔ `BOOL` | Any different types |
+
+**Key rule**: If either type has parameters (like length or precision), warnings are shown even if the base types are aliases. This ensures you're aware of constraint differences like `VARCHAR(100)` vs `VARCHAR(200)`.
+
+### Handling Type Mismatches
+
+Type mismatch warnings have **no SQL** - they require manual intervention:
+
+1. **Review the mismatch**: Is this intentional or an error in the contract?
+2. **Update the contract**: Change the `logicalType` to match the existing column
+3. **Migrate the data**: If the change is intentional, manually alter the column type in Databricks
+
+```sql
+-- Example: Change column type (may require data migration)
+ALTER TABLE main.sales.customers ALTER COLUMN id TYPE INT;
+```
 
 ## JUnit XML Reports
 

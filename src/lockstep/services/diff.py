@@ -120,14 +120,15 @@ class DiffService:
         current: CatalogTable,
         full_table_name: str,
     ) -> None:
-        """Plan column additions and changes."""
+        """Plan column additions, type mismatch warnings, and removals."""
         current_columns = {col.name.lower(): col for col in current.columns}
         contract_columns = {col.name.lower(): col for col in contract.columns}
 
-        # Add missing columns
+        # Add missing columns or detect type mismatches
         for col in contract.columns:
             col_lower = col.name.lower()
             if col_lower not in current_columns:
+                # Column doesn't exist - add it
                 sql = self.sql_gen.add_column(
                     full_table_name=full_table_name,
                     column_name=col.name,
@@ -143,6 +144,27 @@ class DiffService:
                         sql=sql,
                     )
                 )
+            else:
+                # Column exists - check for type mismatch
+                current_col = current_columns[col_lower]
+                contract_type = col.get_databricks_type().upper()
+                current_type = current_col.data_type.upper()
+
+                # Normalize common type aliases for comparison
+                if not self._types_match(contract_type, current_type):
+                    plan.actions.append(
+                        SyncAction(
+                            action_type=ActionType.TYPE_MISMATCH,
+                            target=f"{full_table_name}.{col.name}",
+                            description=f"Type mismatch for column {col.name}: contract={contract_type}, catalog={current_type}",
+                            sql=None,  # No SQL - manual intervention required
+                            details={
+                                "column": col.name,
+                                "contract_type": contract_type,
+                                "catalog_type": current_type,
+                            },
+                        )
+                    )
 
         # Drop columns not in contract (destructive)
         for col_name_lower, current_col in current_columns.items():
@@ -156,6 +178,47 @@ class DiffService:
                         sql=sql,
                     )
                 )
+
+    def _types_match(self, contract_type: str, catalog_type: str) -> bool:
+        """Check if two data types are equivalent, accounting for aliases.
+
+        Args:
+            contract_type: Type from the contract (normalized to uppercase).
+            catalog_type: Type from the catalog (normalized to uppercase).
+
+        Returns:
+            True if the types are considered equivalent.
+        """
+        # Direct match (exact strings including any parameters)
+        if contract_type == catalog_type:
+            return True
+
+        # Extract base types and check for parameters
+        contract_base = contract_type.split("(")[0].strip()
+        catalog_base = catalog_type.split("(")[0].strip()
+        contract_has_params = "(" in contract_type
+        catalog_has_params = "(" in catalog_type
+
+        # If either type has parameters and they differ, warn (even if base types match)
+        # e.g., VARCHAR(100) vs VARCHAR(200), or STRING vs VARCHAR(100)
+        if contract_has_params or catalog_has_params:
+            # Parameters present and full types don't match - warn
+            return False
+
+        # Neither has parameters - check if base types are in the same equivalence group
+        equivalence_groups: list[set[str]] = [
+            {"STRING", "VARCHAR", "TEXT"},
+            {"INT", "INTEGER"},
+            {"LONG", "BIGINT"},
+            {"SHORT", "SMALLINT"},
+            {"BYTE", "TINYINT"},
+            {"FLOAT", "REAL"},
+            {"DOUBLE", "DOUBLE PRECISION"},
+            {"BOOLEAN", "BOOL"},
+        ]
+
+        # Check if both base types belong to the same equivalence group
+        return any(contract_base in group and catalog_base in group for group in equivalence_groups)
 
     def _plan_description_changes(
         self,

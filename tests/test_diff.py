@@ -265,6 +265,181 @@ class TestDiffService:
 
         assert plan.table_name == "dev.staging.test_customers"
 
+    def test_diff_type_mismatch(self, diff_service: DiffService) -> None:
+        """Test diff detects column type mismatches."""
+        # Contract defines customer_id as STRING, amount as DOUBLE
+        contract = Contract.model_validate(
+            {
+                "name": "test",
+                "dataset": {"catalog": "main", "schema": "default", "table": "test"},
+                "schema": {
+                    "properties": [
+                        {"name": "customer_id", "logicalType": "string"},
+                        {"name": "amount", "logicalType": "double"},
+                    ]
+                },
+            }
+        )
+
+        # Catalog has customer_id as INT and amount as STRING (mismatches)
+        catalog_state = CatalogTable(
+            catalog="main",
+            schema_name="default",
+            table_name="test",
+            columns=[
+                CatalogColumn(name="customer_id", data_type="INT"),
+                CatalogColumn(name="amount", data_type="STRING"),
+            ],
+        )
+
+        plan = diff_service.compute_diff(contract, catalog_state)
+
+        # Should have type mismatch warnings
+        type_mismatch_actions = [
+            a for a in plan.actions if a.action_type == ActionType.TYPE_MISMATCH
+        ]
+        assert len(type_mismatch_actions) == 2
+
+        # Check details are captured
+        customer_mismatch = next(
+            a for a in type_mismatch_actions if a.details.get("column") == "customer_id"
+        )
+        assert customer_mismatch.details["contract_type"] == "STRING"
+        assert customer_mismatch.details["catalog_type"] == "INT"
+        assert customer_mismatch.sql is None  # No SQL for warnings
+
+        # Plan should report warnings
+        assert plan.has_warnings is True
+
+    def test_diff_type_aliases_match(self, diff_service: DiffService) -> None:
+        """Test that non-parameterized type aliases are treated as equivalent."""
+        # Contract uses INT, BIGINT, STRING via logical types
+        contract = Contract.model_validate(
+            {
+                "name": "test",
+                "dataset": {"catalog": "main", "schema": "default", "table": "test"},
+                "schema": {
+                    "properties": [
+                        {"name": "count", "logicalType": "integer"},  # Maps to INT
+                        {"name": "big_count", "logicalType": "long"},  # Maps to BIGINT
+                        {"name": "name", "logicalType": "string"},  # Maps to STRING
+                    ]
+                },
+            }
+        )
+
+        # Catalog uses non-parameterized aliases (no length/precision specified)
+        catalog_state = CatalogTable(
+            catalog="main",
+            schema_name="default",
+            table_name="test",
+            columns=[
+                CatalogColumn(name="count", data_type="INTEGER"),  # Alias for INT
+                CatalogColumn(name="big_count", data_type="BIGINT"),  # Alias for LONG
+                CatalogColumn(name="name", data_type="VARCHAR"),  # Alias for STRING (no length)
+            ],
+        )
+
+        plan = diff_service.compute_diff(contract, catalog_state)
+
+        # Should NOT have type mismatch warnings (non-parameterized aliases are equivalent)
+        type_mismatch_actions = [
+            a for a in plan.actions if a.action_type == ActionType.TYPE_MISMATCH
+        ]
+        assert len(type_mismatch_actions) == 0
+        assert plan.has_warnings is False
+
+    def test_diff_type_warns_on_parameterized(self, diff_service: DiffService) -> None:
+        """Test that parameterized types trigger warnings even when base types match."""
+        # Contract uses STRING
+        contract = Contract.model_validate(
+            {
+                "name": "test",
+                "dataset": {"catalog": "main", "schema": "default", "table": "test"},
+                "schema": {
+                    "properties": [
+                        {"name": "name", "logicalType": "string"},  # Maps to STRING
+                    ]
+                },
+            }
+        )
+
+        # Catalog uses VARCHAR(100) - parameterized version
+        catalog_state = CatalogTable(
+            catalog="main",
+            schema_name="default",
+            table_name="test",
+            columns=[
+                CatalogColumn(name="name", data_type="VARCHAR(100)"),  # Has length constraint
+            ],
+        )
+
+        plan = diff_service.compute_diff(contract, catalog_state)
+
+        # SHOULD have type mismatch warning (parameterized type differs)
+        type_mismatch_actions = [
+            a for a in plan.actions if a.action_type == ActionType.TYPE_MISMATCH
+        ]
+        assert len(type_mismatch_actions) == 1
+        assert plan.has_warnings is True
+        assert type_mismatch_actions[0].details["contract_type"] == "STRING"
+        assert type_mismatch_actions[0].details["catalog_type"] == "VARCHAR(100)"
+
+    def test_types_match_direct(self, diff_service: DiffService) -> None:
+        """Test _types_match for direct type equality."""
+        assert diff_service._types_match("STRING", "STRING") is True
+        assert diff_service._types_match("INT", "INT") is True
+        assert diff_service._types_match("TIMESTAMP", "TIMESTAMP") is True
+
+    def test_types_match_aliases(self, diff_service: DiffService) -> None:
+        """Test _types_match for type aliases."""
+        # String aliases
+        assert diff_service._types_match("STRING", "VARCHAR") is True
+        assert diff_service._types_match("VARCHAR", "STRING") is True
+        assert diff_service._types_match("TEXT", "STRING") is True
+
+        # Integer aliases
+        assert diff_service._types_match("INT", "INTEGER") is True
+        assert diff_service._types_match("INTEGER", "INT") is True
+
+        # Long aliases
+        assert diff_service._types_match("LONG", "BIGINT") is True
+        assert diff_service._types_match("BIGINT", "LONG") is True
+
+        # Boolean aliases
+        assert diff_service._types_match("BOOLEAN", "BOOL") is True
+        assert diff_service._types_match("BOOL", "BOOLEAN") is True
+
+    def test_types_match_mismatches(self, diff_service: DiffService) -> None:
+        """Test _types_match for actual mismatches."""
+        assert diff_service._types_match("STRING", "INT") is False
+        assert diff_service._types_match("DOUBLE", "STRING") is False
+        assert diff_service._types_match("TIMESTAMP", "DATE") is False
+        assert diff_service._types_match("INT", "BIGINT") is False  # Different sizes
+
+    def test_types_match_parameterized(self, diff_service: DiffService) -> None:
+        """Test _types_match warns when parameterized types differ."""
+        # Exact match with same parameters - no warning
+        assert diff_service._types_match("VARCHAR(100)", "VARCHAR(100)") is True
+        assert diff_service._types_match("DECIMAL(10,2)", "DECIMAL(10,2)") is True
+
+        # Different parameters - WARN (even if base type is same/alias)
+        assert diff_service._types_match("VARCHAR(100)", "VARCHAR(200)") is False
+        assert diff_service._types_match("DECIMAL(10,2)", "DECIMAL(18,4)") is False
+
+        # Parameterized vs non-parameterized - WARN
+        assert diff_service._types_match("VARCHAR", "VARCHAR(100)") is False
+        assert diff_service._types_match("STRING", "VARCHAR(100)") is False
+        assert diff_service._types_match("DECIMAL", "DECIMAL(10,2)") is False
+
+        # Non-parameterized aliases still match
+        assert diff_service._types_match("STRING", "VARCHAR") is True
+        assert diff_service._types_match("INT", "INTEGER") is True
+
+        # Different base types - always warn
+        assert diff_service._types_match("VARCHAR(100)", "INT") is False
+        assert diff_service._types_match("STRING", "INT(11)") is False
+
 
 class TestSyncPlan:
     """Tests for SyncPlan filtering."""

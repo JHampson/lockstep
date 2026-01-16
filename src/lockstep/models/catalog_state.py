@@ -30,6 +30,8 @@ class ActionType(str, Enum):
     DROP_PRIMARY_KEY = "drop_primary_key"
     ADD_NOT_NULL = "add_not_null"
     DROP_NOT_NULL = "drop_not_null"
+    # Warning actions (no SQL, informational only)
+    TYPE_MISMATCH = "type_mismatch"
 
 
 @dataclass
@@ -187,6 +189,13 @@ CONSTRAINT_REMOVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
     }
 )
 
+# Action types that are warnings only (no SQL, informational)
+WARNING_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.TYPE_MISMATCH,
+    }
+)
+
 
 @dataclass
 class SyncPlan:
@@ -205,6 +214,11 @@ class SyncPlan:
     def has_destructive_changes(self) -> bool:
         """Check if the plan contains destructive changes."""
         return any(action.action_type in DESTRUCTIVE_ACTION_TYPES for action in self.actions)
+
+    @property
+    def has_warnings(self) -> bool:
+        """Check if the plan contains warning actions (e.g., type mismatches)."""
+        return any(action.action_type in WARNING_ACTION_TYPES for action in self.actions)
 
     def filter_no_add_tags(self) -> SyncPlan:
         """Return a new plan without tag add/update actions."""
