@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -13,6 +14,12 @@ from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
 from lockstep.services.sync import SyncResult
 
 runner = CliRunner()
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    ansi_escape = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_escape.sub("", text)
 
 
 class TestVersionCommand:
@@ -477,33 +484,37 @@ class TestHelpMessages:
         """Test main help message."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "plan" in result.stdout
-        assert "apply" in result.stdout
-        assert "validate" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "plan" in output
+        assert "apply" in output
+        assert "validate" in output
 
     def test_plan_help(self) -> None:
         """Test plan help message."""
         result = runner.invoke(app, ["plan", "--help"])
         assert result.exit_code == 0
-        assert "--junit-xml" in result.stdout
-        assert "--catalog-override" in result.stdout
-        assert "--auth-type" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "--junit-xml" in output
+        assert "--catalog-override" in output
+        assert "--auth-type" in output
 
     def test_apply_help(self) -> None:
         """Test apply help message."""
         result = runner.invoke(app, ["apply", "--help"])
         assert result.exit_code == 0
-        assert "--add-tags" in result.stdout
-        assert "--add-columns" in result.stdout
-        assert "--remove-columns" in result.stdout
-        assert "--remove-tags" in result.stdout
-        assert "--catalog-override" in result.stdout
-        assert "--auth-type" in result.stdout
-        assert "--token" in result.stdout
-        assert "--client-id" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "--add-tags" in output
+        assert "--add-columns" in output
+        assert "--remove-columns" in output
+        assert "--remove-tags" in output
+        assert "--catalog-override" in output
+        assert "--auth-type" in output
+        assert "--token" in output
+        assert "--client-id" in output
 
     def test_validate_help(self) -> None:
         """Test validate help message."""
         result = runner.invoke(app, ["validate", "--help"])
         assert result.exit_code == 0
-        assert "--verbose" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "--verbose" in output
