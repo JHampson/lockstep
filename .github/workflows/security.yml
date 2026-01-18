@@ -62,7 +62,7 @@ jobs:
             --output audit-report.md || true
 
       - name: Upload audit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: dependency-audit-report
@@ -99,7 +99,7 @@ jobs:
             --confidence-level medium || true
 
       - name: Upload bandit report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: bandit-security-report
