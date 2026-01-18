@@ -130,11 +130,23 @@ jobs:
   trivy-scan:
     name: Trivy Vulnerability Scan
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Trivy vulnerability scanner (filesystem)
         uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "table"
+          severity: "CRITICAL,HIGH,MEDIUM"
+
+      - name: Run Trivy and output SARIF
+        uses: aquasecurity/trivy-action@master
+        continue-on-error: true
         with:
           scan-type: "fs"
           scan-ref: "."
