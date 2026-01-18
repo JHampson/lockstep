@@ -1,5 +1,10 @@
 # Lockstep
 
+[![CI](https://github.com/JHampson/lockstep/actions/workflows/ci.yml/badge.svg)](https://github.com/JHampson/lockstep/actions/workflows/ci.yml)
+[![Security](https://github.com/JHampson/lockstep/actions/workflows/security.yml/badge.svg)](https://github.com/JHampson/lockstep/actions/workflows/security.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https://bitol-io.github.io/open-data-contract-standard/) YAML specifications to Databricks Unity Catalog.
 
 ## Use Cases
