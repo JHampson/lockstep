@@ -16,6 +16,18 @@ tags:
   - classification:restricted
   - data_steward:toll_team
 
+# Role-based access control
+roles:
+  - principal: data_engineers
+    type: group
+    permissions:
+      - SELECT
+      - MODIFY
+  - principal: data_analysts
+    type: group
+    permissions:
+      - SELECT
+
 # Server configuration per ODCS v3 spec
 # For Databricks server type: catalog + schema are required fields
 servers:

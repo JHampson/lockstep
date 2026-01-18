@@ -9,6 +9,7 @@ import logging
 
 from lockstep.models.catalog_state import (
     ActionType,
+    CatalogGrant,
     CatalogTable,
     SyncAction,
     SyncPlan,
@@ -57,12 +58,15 @@ class DiffService:
         if current_state is None:
             # Table doesn't exist - create it
             self._plan_create_table(plan, contract, full_table_name)
+            # Also plan permissions for new table
+            self._plan_permission_changes(plan, contract, None, full_table_name)
         else:
             # Table exists - compute incremental changes
             self._plan_column_changes(plan, contract, current_state, full_table_name)
             self._plan_description_changes(plan, contract, current_state, full_table_name)
             self._plan_constraint_changes(plan, contract, current_state, full_table_name)
             self._plan_tag_changes(plan, contract, current_state, full_table_name)
+            self._plan_permission_changes(plan, contract, current_state, full_table_name)
 
         return plan
 
@@ -449,3 +453,80 @@ class DiffService:
                             details={"column": col.name, "tag": tag_name},
                         )
                     )
+
+    def _plan_permission_changes(
+        self,
+        plan: SyncPlan,
+        contract: Contract,
+        current: CatalogTable | None,
+        full_table_name: str,
+    ) -> None:
+        """Plan permission grant and revoke actions.
+
+        Args:
+            plan: SyncPlan to append actions to.
+            contract: Contract with expected roles.
+            current: Current table state (None if new table).
+            full_table_name: Fully qualified table name.
+        """
+        # Build set of expected grants from contract roles
+        expected_grants: set[CatalogGrant] = set()
+        for role in contract.roles:
+            principal_type = role.principal_type.upper()
+            for perm in role.permissions:
+                expected_grants.add(
+                    CatalogGrant(
+                        principal=role.principal,
+                        principal_type=principal_type,
+                        privilege=perm.upper(),
+                    )
+                )
+
+        # Get current grants (empty if table doesn't exist yet)
+        current_grants: set[CatalogGrant] = set()
+        if current is not None:
+            current_grants = set(current.grants)
+
+        # Plan grants to add (in contract but not in catalog)
+        for grant in expected_grants - current_grants:
+            sql = self.sql_gen.grant_permission(
+                full_table_name=full_table_name,
+                principal=grant.principal,
+                principal_type=grant.principal_type,
+                privilege=grant.privilege,
+            )
+            plan.actions.append(
+                SyncAction(
+                    action_type=ActionType.GRANT_PERMISSION,
+                    target=full_table_name,
+                    description=f"Grant {grant.privilege} to {grant.principal_type.lower()} {grant.principal}",
+                    sql=sql,
+                    details={
+                        "principal": grant.principal,
+                        "principal_type": grant.principal_type,
+                        "privilege": grant.privilege,
+                    },
+                )
+            )
+
+        # Plan revokes (in catalog but not in contract) - destructive
+        for grant in current_grants - expected_grants:
+            sql = self.sql_gen.revoke_permission(
+                full_table_name=full_table_name,
+                principal=grant.principal,
+                principal_type=grant.principal_type,
+                privilege=grant.privilege,
+            )
+            plan.actions.append(
+                SyncAction(
+                    action_type=ActionType.REVOKE_PERMISSION,
+                    target=full_table_name,
+                    description=f"Revoke {grant.privilege} from {grant.principal_type.lower()} {grant.principal}",
+                    sql=sql,
+                    details={
+                        "principal": grant.principal,
+                        "principal_type": grant.principal_type,
+                        "privilege": grant.privilege,
+                    },
+                )
+            )

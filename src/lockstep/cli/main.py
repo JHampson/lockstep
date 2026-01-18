@@ -297,6 +297,13 @@ def plan_changes(
             help="Exclude constraint changes from the plan.",
         ),
     ] = False,
+    ignore_permissions: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-permissions",
+            help="Exclude permission (grant/revoke) changes from the plan.",
+        ),
+    ] = False,
     catalog_override: Annotated[str | None, _catalog_override_option] = None,
     schema_override: Annotated[str | None, _schema_override_option] = None,
     table_prefix: Annotated[str | None, _table_prefix_option] = None,
@@ -361,9 +368,11 @@ def plan_changes(
         add_columns=not ignore_columns,
         add_descriptions=not ignore_descriptions,
         add_constraints=not ignore_constraints,
+        add_permissions=not ignore_permissions,
         remove_columns=not ignore_columns,
         remove_tags=not ignore_tags,
         remove_constraints=not ignore_constraints,
+        remove_permissions=not ignore_permissions,  # Show revokes in plan too
     )
 
     try:
@@ -550,6 +559,13 @@ def apply_contracts(
             help="Add constraints (PK, NOT NULL) from contract (default: enabled).",
         ),
     ] = True,
+    add_permissions: Annotated[
+        bool,
+        typer.Option(
+            "--add-permissions/--no-add-permissions",
+            help="Grant permissions from contract roles (default: enabled).",
+        ),
+    ] = True,
     remove_columns: Annotated[
         bool,
         typer.Option(
@@ -569,6 +585,13 @@ def apply_contracts(
         typer.Option(
             "--remove-constraints/--no-remove-constraints",
             help="Remove constraints not in contract (default: disabled).",
+        ),
+    ] = False,
+    remove_permissions: Annotated[
+        bool,
+        typer.Option(
+            "--remove-permissions/--no-remove-permissions",
+            help="Revoke permissions not in contract roles (default: disabled).",
         ),
     ] = False,
     catalog_override: Annotated[str | None, _catalog_override_option] = None,
@@ -644,9 +667,11 @@ def apply_contracts(
         add_columns=add_columns,
         add_descriptions=add_descriptions,
         add_constraints=add_constraints,
+        add_permissions=add_permissions,
         remove_columns=remove_columns,
         remove_tags=remove_tags,
         remove_constraints=remove_constraints,
+        remove_permissions=remove_permissions,
     )
 
     try:

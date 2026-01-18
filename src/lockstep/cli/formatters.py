@@ -36,6 +36,9 @@ ACTION_STYLES = {
     "drop_primary_key": ("🔑", "red"),
     "add_not_null": ("❗", "green"),
     "drop_not_null": ("❗", "red"),
+    # Permission actions
+    "grant_permission": ("🔓", "green"),
+    "revoke_permission": ("🔒", "red"),
     # Warning actions (no SQL, informational only)
     "type_mismatch": ("⚠️", "yellow bold"),
 }

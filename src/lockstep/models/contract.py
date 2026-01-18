@@ -200,6 +200,63 @@ class TableInfo(BaseModel):
         return f"{self.catalog}.{self.schema_name}.{self.table}"
 
 
+class Permission(str, Enum):
+    """Unity Catalog table permissions."""
+
+    SELECT = "SELECT"
+    MODIFY = "MODIFY"
+    ALL_PRIVILEGES = "ALL PRIVILEGES"
+    # Additional privileges
+    APPLY_TAG = "APPLY TAG"
+    READ_METADATA = "READ_METADATA"
+
+
+class Role(BaseModel):
+    """Role definition specifying permissions for a principal (user or group).
+
+    Example YAML:
+        roles:
+          - principal: data_engineers
+            type: group
+            permissions:
+              - SELECT
+              - MODIFY
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    principal: str = Field(..., description="User email or group name")
+    principal_type: str = Field(
+        default="group",
+        alias="type",
+        description="Type of principal: 'user' or 'group'",
+    )
+    permissions: list[str] = Field(
+        default_factory=list,
+        description="List of permissions (SELECT, MODIFY, ALL PRIVILEGES, etc.)",
+    )
+
+    @field_validator("principal_type", mode="before")
+    @classmethod
+    def normalize_principal_type(cls, v: str) -> str:
+        """Normalize principal type to lowercase."""
+        if isinstance(v, str):
+            v = v.lower()
+            if v in ("user", "users"):
+                return "user"
+            if v in ("group", "groups"):
+                return "group"
+        return v
+
+    @field_validator("permissions", mode="before")
+    @classmethod
+    def normalize_permissions(cls, v: list[str]) -> list[str]:
+        """Normalize permissions to uppercase."""
+        if isinstance(v, list):
+            return [p.upper() if isinstance(p, str) else p for p in v]
+        return v
+
+
 def parse_tags(tags_input: Any) -> dict[str, str]:
     """Parse tags from ODCS v3 array format or dict format.
 
@@ -302,6 +359,12 @@ class Contract(BaseModel):
     # Owner info (optional, for future use)
     owner: str | None = Field(default=None, description="Data owner")
     team: str | None = Field(default=None, description="Owning team")
+
+    # Roles section for permission management
+    roles: list[Role] = Field(
+        default_factory=list,
+        description="Role definitions specifying user/group permissions",
+    )
 
     # Computed table info (set in validator)
     _table_info: TableInfo | None = None

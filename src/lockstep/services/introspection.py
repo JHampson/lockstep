@@ -8,7 +8,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from lockstep.models.catalog_state import CatalogColumn, CatalogConstraint, CatalogTable
+from lockstep.models.catalog_state import (
+    CatalogColumn,
+    CatalogConstraint,
+    CatalogGrant,
+    CatalogTable,
+)
 
 if TYPE_CHECKING:
     from lockstep.databricks.connector import DatabricksConnector
@@ -82,6 +87,9 @@ class IntrospectionService:
             if col.name in column_tags:
                 col.tags = column_tags[col.name]
 
+        # Get grants/permissions
+        grants = self._get_grants(catalog, schema, table)
+
         return CatalogTable(
             catalog=catalog,
             schema_name=schema,
@@ -90,6 +98,7 @@ class IntrospectionService:
             description=table_info.get("comment"),
             tags=table_tags,  # Includes system.certification_status if present
             constraints=constraints,
+            grants=grants,
         )
 
     def _parse_table_name(self, full_name: str) -> tuple[str, str, str]:
@@ -289,6 +298,62 @@ class IntrospectionService:
         except Exception as e:
             # information_schema.table_tags might not exist in older Unity Catalog versions
             logger.debug(f"Could not fetch table tags from information_schema: {e}")
+
+    def _get_grants(self, catalog: str, schema: str, table: str) -> list[CatalogGrant]:
+        """Get grants/permissions for a table.
+
+        Uses SHOW GRANTS ON TABLE to retrieve current permissions.
+
+        Args:
+            catalog: Catalog name.
+            schema: Schema name.
+            table: Table name.
+
+        Returns:
+            List of CatalogGrant objects.
+        """
+        grants: list[CatalogGrant] = []
+        full_name = f"{catalog}.{schema}.{table}"
+
+        try:
+            # SHOW GRANTS returns: Principal, ActionType, ObjectType, ObjectKey
+            sql = f"SHOW GRANTS ON TABLE {full_name}"
+            rows = self.connector.fetchall(sql)
+
+            for row in rows:
+                # Handle different column name formats
+                principal = row.get("Principal") or row.get("principal", "")
+                action_type = row.get("ActionType") or row.get("action_type", "")
+
+                if not principal or not action_type:
+                    continue
+
+                # Parse principal type from principal string
+                # Format is typically "user@domain.com" or "`group_name`"
+                # SHOW GRANTS returns principal in format: `group_name` or user@email.com
+                principal_type = "GROUP"
+                principal_name = principal
+
+                # Check if it looks like an email (user)
+                if "@" in principal:
+                    principal_type = "USER"
+                # Backtick-quoted names are typically groups
+                elif principal.startswith("`") and principal.endswith("`"):
+                    principal_name = principal[1:-1]
+                    principal_type = "GROUP"
+
+                grants.append(
+                    CatalogGrant(
+                        principal=principal_name,
+                        principal_type=principal_type,
+                        privilege=action_type.upper(),
+                    )
+                )
+
+        except Exception as e:
+            logger.debug(f"Could not fetch grants for {full_name}: {e}")
+
+        return grants
 
     def get_not_null_columns(self, full_table_name: str) -> set[str]:
         """Get columns that have NOT NULL constraints.

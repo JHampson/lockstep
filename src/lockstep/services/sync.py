@@ -46,10 +46,12 @@ class SyncOptions:
     add_columns: bool = True
     add_descriptions: bool = True
     add_constraints: bool = True
+    add_permissions: bool = True
     # Selective sync options - what to REMOVE (all default to False for safety)
     remove_columns: bool = False
     remove_tags: bool = False
     remove_constraints: bool = False
+    remove_permissions: bool = False  # Destructive - revokes permissions
 
 
 class SyncService:
@@ -118,6 +120,9 @@ class SyncService:
             if not options.add_constraints:
                 plan = plan.filter_no_add_constraints()
 
+            if not options.add_permissions:
+                plan = plan.filter_no_add_permissions()
+
             # Filter out REMOVE operations if disabled (default)
             if not options.remove_columns:
                 plan = plan.filter_no_remove_columns()
@@ -127,6 +132,9 @@ class SyncService:
 
             if not options.remove_constraints:
                 plan = plan.filter_no_remove_constraints()
+
+            if not options.remove_permissions:
+                plan = plan.filter_no_remove_permissions()
 
             result.plan = plan
 

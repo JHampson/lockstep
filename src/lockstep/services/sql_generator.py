@@ -192,3 +192,57 @@ class SQLGenerator:
             f"ALTER COLUMN {self._escape_identifier(column_name)} "
             f"UNSET TAGS ('{self._escape_string(tag_name)}')"
         )
+
+    def grant_permission(
+        self,
+        full_table_name: str,
+        principal: str,
+        principal_type: str,
+        privilege: str,
+    ) -> str:
+        """Generate GRANT statement for table permission.
+
+        Args:
+            full_table_name: Fully qualified table name.
+            principal: User email or group name.
+            principal_type: 'USER' or 'GROUP'.
+            privilege: Permission to grant (SELECT, MODIFY, ALL PRIVILEGES, etc.).
+
+        Returns:
+            GRANT SQL statement.
+        """
+        # Format principal based on type
+        if principal_type.upper() == "USER":
+            principal_sql = f"`{self._escape_string(principal)}`"
+        else:
+            # Group names need backticks
+            principal_sql = f"`{self._escape_string(principal)}`"
+
+        return f"GRANT {privilege} ON TABLE {full_table_name} TO {principal_sql}"
+
+    def revoke_permission(
+        self,
+        full_table_name: str,
+        principal: str,
+        principal_type: str,
+        privilege: str,
+    ) -> str:
+        """Generate REVOKE statement for table permission.
+
+        Args:
+            full_table_name: Fully qualified table name.
+            principal: User email or group name.
+            principal_type: 'USER' or 'GROUP'.
+            privilege: Permission to revoke (SELECT, MODIFY, ALL PRIVILEGES, etc.).
+
+        Returns:
+            REVOKE SQL statement.
+        """
+        # Format principal based on type
+        if principal_type.upper() == "USER":
+            principal_sql = f"`{self._escape_string(principal)}`"
+        else:
+            # Group names need backticks
+            principal_sql = f"`{self._escape_string(principal)}`"
+
+        return f"REVOKE {privilege} ON TABLE {full_table_name} FROM {principal_sql}"

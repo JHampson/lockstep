@@ -30,6 +30,9 @@ class ActionType(str, Enum):
     DROP_PRIMARY_KEY = "drop_primary_key"
     ADD_NOT_NULL = "add_not_null"
     DROP_NOT_NULL = "drop_not_null"
+    # Permission actions
+    GRANT_PERMISSION = "grant_permission"
+    REVOKE_PERMISSION = "revoke_permission"
     # Warning actions (no SQL, informational only)
     TYPE_MISMATCH = "type_mismatch"
 
@@ -55,6 +58,27 @@ class CatalogConstraint:
 
 
 @dataclass
+class CatalogGrant:
+    """Represents a permission grant in Unity Catalog."""
+
+    principal: str  # User email or group name
+    principal_type: str  # 'USER' or 'GROUP'
+    privilege: str  # e.g., 'SELECT', 'MODIFY', 'ALL PRIVILEGES'
+
+    def __hash__(self) -> int:
+        return hash((self.principal.lower(), self.principal_type.upper(), self.privilege.upper()))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, CatalogGrant):
+            return False
+        return (
+            self.principal.lower() == other.principal.lower()
+            and self.principal_type.upper() == other.principal_type.upper()
+            and self.privilege.upper() == other.privilege.upper()
+        )
+
+
+@dataclass
 class CatalogTable:
     """Represents a table as it exists in Unity Catalog."""
 
@@ -65,6 +89,7 @@ class CatalogTable:
     description: str | None = None
     tags: dict[str, str] = field(default_factory=dict)
     constraints: list[CatalogConstraint] = field(default_factory=list)
+    grants: list[CatalogGrant] = field(default_factory=list)
 
     @property
     def full_name(self) -> str:
@@ -130,6 +155,7 @@ DESTRUCTIVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
         ActionType.REMOVE_COLUMN_TAG,
         ActionType.DROP_PRIMARY_KEY,
         ActionType.DROP_NOT_NULL,
+        ActionType.REVOKE_PERMISSION,
     }
 )
 
@@ -193,6 +219,20 @@ CONSTRAINT_REMOVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
 WARNING_ACTION_TYPES: frozenset[ActionType] = frozenset(
     {
         ActionType.TYPE_MISMATCH,
+    }
+)
+
+# Action types for adding permissions
+PERMISSION_ADD_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.GRANT_PERMISSION,
+    }
+)
+
+# Action types for removing permissions (destructive)
+PERMISSION_REMOVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.REVOKE_PERMISSION,
     }
 )
 
@@ -296,6 +336,32 @@ class SyncPlan:
             action
             for action in self.actions
             if action.action_type not in CONSTRAINT_REMOVE_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_add_permissions(self) -> SyncPlan:
+        """Return a new plan without permission grant actions."""
+        filtered_actions = [
+            action
+            for action in self.actions
+            if action.action_type not in PERMISSION_ADD_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_remove_permissions(self) -> SyncPlan:
+        """Return a new plan without permission revoke actions."""
+        filtered_actions = [
+            action
+            for action in self.actions
+            if action.action_type not in PERMISSION_REMOVE_ACTION_TYPES
         ]
         return SyncPlan(
             contract_name=self.contract_name,
