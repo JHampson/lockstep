@@ -28,7 +28,9 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       - name: Run ruff linter
         run: uv run ruff check src tests
@@ -53,7 +55,9 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       - name: Run mypy
         run: uv run mypy src --ignore-missing-imports
@@ -80,7 +84,9 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       - name: Run tests with coverage
         run: |
@@ -135,4 +141,3 @@ jobs:
         with:
           name: dist
           path: dist/
-
