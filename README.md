@@ -305,17 +305,28 @@ tags:
   # Unity Catalog certification is set via the system.certification_status tag
   system.certification_status: "certified"  # or "deprecated"
 
-# Role-based access control (permissions)
+# ODCS v3 roles (for documentation/governance)
 roles:
-  - principal: data_engineers
-    type: group
-    permissions:
-      - SELECT
-      - MODIFY
-  - principal: data_analysts
-    type: group
-    permissions:
-      - SELECT
+  - role: data_engineers
+    access: read_write
+    description: Engineering team with full access
+  - role: data_analysts
+    access: read_only
+    description: Analytics team with read-only access
+
+# Custom permissions for GRANT/REVOKE operations
+customProperties:
+  - property: permissions
+    value:
+      - principal: data_engineers
+        type: group
+        privileges:
+          - SELECT
+          - MODIFY
+      - principal: data_analysts
+        type: group
+        privileges:
+          - SELECT
 ```
 
 ### 2. Validate the Contract
@@ -579,28 +590,50 @@ The tool supports a subset of the ODCS specification focused on Unity Catalog sy
 | `tags` | object | Key-value tags for the table |
 | `certification` | enum | certified, deprecated, not_certified |
 
-### Roles (Permissions)
+### Roles (ODCS v3 Format)
 
-Define access control for the table using the `roles` section:
+ODCS v3 uses `roles` for documenting IAM roles and approval workflows:
 
 ```yaml
 roles:
-  - principal: data_engineers
-    type: group
-    permissions:
-      - SELECT
-      - MODIFY
-  - principal: analyst@company.com
-    type: user
-    permissions:
-      - SELECT
+  - role: data_engineers
+    access: read_write
+    description: Engineering team with full access
+  - role: data_analysts
+    access: read_only
+    description: Analytics team
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `role` | string | Yes | Name of the IAM role |
+| `access` | string | No | Type of access (read, write, read_write) |
+| `description` | string | No | Description of the role |
+
+### Permissions (Custom Properties)
+
+For actual `GRANT`/`REVOKE` operations in Unity Catalog, define permissions in `customProperties`:
+
+```yaml
+customProperties:
+  - property: permissions
+    value:
+      - principal: data_engineers
+        type: group
+        privileges:
+          - SELECT
+          - MODIFY
+      - principal: analyst@company.com
+        type: user
+        privileges:
+          - SELECT
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `principal` | string | Yes | User email or group name |
 | `type` | string | No | `user` or `group` (default: `group`) |
-| `permissions` | list | Yes | List of permissions to grant |
+| `privileges` | list | Yes | List of privileges to grant |
 
 **Supported Permissions:**
 
@@ -716,27 +749,39 @@ ALTER TABLE main.sales.customers ALTER COLUMN id TYPE INT;
 
 ## Permission Management
 
-Lockstep can manage table permissions (GRANT/REVOKE) based on roles defined in your contract. This allows you to define access control as code alongside your schema.
+Lockstep can manage table permissions (GRANT/REVOKE) based on permissions defined in your contract's `customProperties`. This allows you to define access control as code alongside your schema.
 
-### Defining Roles
+### Defining Permissions
 
-Add a `roles` section to your contract:
+Add a `customProperties` section with `permissions` to your contract (ODCS-compliant format):
 
 ```yaml
+# ODCS v3 roles for documentation/governance
 roles:
-  - principal: data_engineers
-    type: group
-    permissions:
-      - SELECT
-      - MODIFY
-  - principal: data_analysts
-    type: group
-    permissions:
-      - SELECT
-  - principal: admin@company.com
-    type: user
-    permissions:
-      - ALL PRIVILEGES
+  - role: data_engineers
+    access: read_write
+    description: Engineering team with full access
+  - role: data_analysts
+    access: read_only
+    description: Analytics team
+
+# Permissions for GRANT/REVOKE operations
+customProperties:
+  - property: permissions
+    value:
+      - principal: data_engineers
+        type: group
+        privileges:
+          - SELECT
+          - MODIFY
+      - principal: data_analysts
+        type: group
+        privileges:
+          - SELECT
+      - principal: admin@company.com
+        type: user
+        privileges:
+          - ALL PRIVILEGES
 ```
 
 ### Plan Output

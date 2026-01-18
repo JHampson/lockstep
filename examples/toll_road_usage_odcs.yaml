@@ -16,17 +16,32 @@ tags:
   - classification:restricted
   - data_steward:toll_team
 
-# Role-based access control
+# Role-based access control with permissions
+# customProperties within each role define GRANT/REVOKE operations
 roles:
-  - principal: data_engineers
-    type: group
-    permissions:
-      - SELECT
-      - MODIFY
-  - principal: data_analysts
-    type: group
-    permissions:
-      - SELECT
+  - role: data_engineers
+    access: read_write
+    description: Engineering team with full table access
+    customProperties:
+      - property: principal
+        value: data_engineers
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
+          - SELECT
+          - MODIFY
+  - role: data_analysts
+    access: read_only
+    description: Analytics team with read-only access
+    customProperties:
+      - property: principal
+        value: data_analysts
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
+          - SELECT
 
 # Server configuration per ODCS v3 spec
 # For Databricks server type: catalog + schema are required fields

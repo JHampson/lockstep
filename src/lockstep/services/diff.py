@@ -465,20 +465,20 @@ class DiffService:
 
         Args:
             plan: SyncPlan to append actions to.
-            contract: Contract with expected roles.
+            contract: Contract with expected permission grants.
             current: Current table state (None if new table).
             full_table_name: Fully qualified table name.
         """
-        # Build set of expected grants from contract roles
+        # Build set of expected grants from contract permission_grants (from customProperties)
         expected_grants: set[CatalogGrant] = set()
-        for role in contract.roles:
-            principal_type = role.principal_type.upper()
-            for perm in role.permissions:
+        for perm_grant in contract.permission_grants:
+            principal_type = perm_grant.principal_type.upper()
+            for privilege in perm_grant.privileges:
                 expected_grants.add(
                     CatalogGrant(
-                        principal=role.principal,
+                        principal=perm_grant.principal,
                         principal_type=principal_type,
-                        privilege=perm.upper(),
+                        privilege=privilege.upper(),
                     )
                 )
 

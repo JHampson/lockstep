@@ -211,16 +211,81 @@ class Permission(str, Enum):
     READ_METADATA = "READ_METADATA"
 
 
-class Role(BaseModel):
-    """Role definition specifying permissions for a principal (user or group).
+class ODCSRole(BaseModel):
+    """ODCS v3 role definition for documenting IAM roles.
+
+    This follows the official ODCS format. For actual GRANT/REVOKE operations,
+    define principal, principal_type, and privileges in customProperties.
 
     Example YAML:
         roles:
-          - principal: data_engineers
-            type: group
-            permissions:
-              - SELECT
-              - MODIFY
+          - role: data_engineers
+            access: read_write
+            description: Engineering team with full access
+            customProperties:
+              - property: principal
+                value: data_engineers
+              - property: principal_type
+                value: group
+              - property: privileges
+                value: [SELECT, MODIFY]
+    """
+
+    model_config = ConfigDict(extra="allow", populate_by_name=True)
+
+    role: str = Field(..., description="Name of the IAM role")
+    access: str | None = Field(default=None, description="Type of access (read, write, read_write)")
+    description: str | None = Field(default=None, description="Description of the role")
+    custom_properties: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="customProperties",
+        description="Custom properties including permission details",
+    )
+
+    def get_permission_grant(self) -> PermissionGrant | None:
+        """Extract PermissionGrant from customProperties if defined.
+
+        Returns:
+            PermissionGrant if principal and privileges are defined, else None.
+        """
+        principal = None
+        principal_type = "group"
+        privileges: list[str] = []
+
+        for prop in self.custom_properties:
+            prop_name = prop.get("property", "")
+            prop_value = prop.get("value")
+
+            if prop_name == "principal" and isinstance(prop_value, str):
+                principal = prop_value
+            elif prop_name == "principal_type" and isinstance(prop_value, str):
+                principal_type = prop_value
+            elif prop_name == "privileges" and isinstance(prop_value, list):
+                privileges = [str(p).upper() for p in prop_value]
+
+        if principal and privileges:
+            return PermissionGrant(
+                principal=principal,
+                principal_type=principal_type,
+                privileges=privileges,
+            )
+        return None
+
+
+class PermissionGrant(BaseModel):
+    """Permission grant for a principal (user or group).
+
+    Used in customProperties to define actual GRANT/REVOKE operations.
+
+    Example in customProperties:
+        customProperties:
+          - property: permissions
+            value:
+              - principal: data_engineers
+                type: group
+                privileges:
+                  - SELECT
+                  - MODIFY
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
@@ -231,9 +296,9 @@ class Role(BaseModel):
         alias="type",
         description="Type of principal: 'user' or 'group'",
     )
-    permissions: list[str] = Field(
+    privileges: list[str] = Field(
         default_factory=list,
-        description="List of permissions (SELECT, MODIFY, ALL PRIVILEGES, etc.)",
+        description="List of privileges (SELECT, MODIFY, ALL PRIVILEGES, etc.)",
     )
 
     @field_validator("principal_type", mode="before")
@@ -248,13 +313,17 @@ class Role(BaseModel):
                 return "group"
         return v
 
-    @field_validator("permissions", mode="before")
+    @field_validator("privileges", mode="before")
     @classmethod
-    def normalize_permissions(cls, v: list[str]) -> list[str]:
-        """Normalize permissions to uppercase."""
+    def normalize_privileges(cls, v: list[str]) -> list[str]:
+        """Normalize privileges to uppercase."""
         if isinstance(v, list):
             return [p.upper() if isinstance(p, str) else p for p in v]
         return v
+
+
+# Keep Role as alias for backward compatibility
+Role = PermissionGrant
 
 
 def parse_tags(tags_input: Any) -> dict[str, str]:
@@ -360,10 +429,17 @@ class Contract(BaseModel):
     owner: str | None = Field(default=None, description="Data owner")
     team: str | None = Field(default=None, description="Owning team")
 
-    # Roles section for permission management
-    roles: list[Role] = Field(
+    # ODCS v3 roles section (for documentation, not direct GRANT/REVOKE)
+    roles: list[ODCSRole] = Field(
         default_factory=list,
-        description="Role definitions specifying user/group permissions",
+        description="ODCS role definitions (documentation only)",
+    )
+
+    # Custom properties (can include permissions for GRANT/REVOKE)
+    custom_properties: list[dict[str, Any]] = Field(
+        default_factory=list,
+        alias="customProperties",
+        description="Custom properties including permission grants",
     )
 
     # Computed table info (set in validator)
@@ -464,6 +540,23 @@ class Contract(BaseModel):
     def primary_key_columns(self) -> list[str]:
         """Get list of primary key column names."""
         return [col.name for col in self.columns if col.primary_key]
+
+    @property
+    def permission_grants(self) -> list[PermissionGrant]:
+        """Extract permission grants from roles' customProperties.
+
+        Each role can define principal, principal_type, and privileges
+        in its customProperties section.
+
+        Returns:
+            List of PermissionGrant objects for GRANT/REVOKE operations.
+        """
+        grants = []
+        for role in self.roles:
+            perm_grant = role.get_permission_grant()
+            if perm_grant is not None:
+                grants.append(perm_grant)
+        return grants
 
     def get_full_table_name(
         self,

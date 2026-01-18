@@ -41,7 +41,7 @@ def _load_config_file() -> dict[str, Any]:
                 try:
                     import tomllib
                 except ImportError:
-                    import tomli as tomllib  # type: ignore[no-redef]
+                    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
                 with open(config_path, "rb") as f:
                     return tomllib.load(f)
             else:
