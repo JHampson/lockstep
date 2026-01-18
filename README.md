@@ -8,14 +8,16 @@
 A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https://bitol-io.github.io/open-data-contract-standard/) YAML specifications to Databricks Unity Catalog.
 
 ## Use Cases
- - Detect diffrences between a ODCS v3 contract specification and a Unity Catalog implementation (Tags, Descriptions, Columns, Constraints)
- - Synchronise Unity Catalog to match the data contact (Tags, Descriptions, Columns, Constraints)
+ - Detect differences between an ODCS v3 contract specification and a Unity Catalog implementation (Tags, Descriptions, Columns, Constraints, Permissions)
+ - Synchronize Unity Catalog to match the data contract (Tags, Descriptions, Columns, Constraints)
+ - Manage table permissions (GRANT/REVOKE) based on contract-defined roles
 
 ## Features
 
 - **Table Management**: Create tables, add columns, update descriptions
 - **Constraint Handling**: Set primary key and NOT NULL constraints (informational)
 - **Tag Synchronization**: Create, update, and remove tags on tables and columns
+- **Permission Management**: Grant and revoke table permissions based on contract-defined roles
 - **Certification**: Manage Unity Catalog certification via `system.certification_status` tag
 - **Type Mismatch Detection**: Warns when column types differ between contract and catalog
 - **Idempotent Operations**: Safe to run multiple times - only applies necessary changes
@@ -302,6 +304,18 @@ tags:
   data_product: "customer-360"
   # Unity Catalog certification is set via the system.certification_status tag
   system.certification_status: "certified"  # or "deprecated"
+
+# Role-based access control (permissions)
+roles:
+  - principal: data_engineers
+    type: group
+    permissions:
+      - SELECT
+      - MODIFY
+  - principal: data_analysts
+    type: group
+    permissions:
+      - SELECT
 ```
 
 ### 2. Validate the Contract
@@ -359,6 +373,7 @@ lockstep plan PATH [OPTIONS]
 - `--ignore-columns`: Exclude column changes from the plan
 - `--ignore-descriptions`: Exclude description changes from the plan
 - `--ignore-constraints`: Exclude constraint changes from the plan
+- `--ignore-permissions`: Exclude permission (GRANT/REVOKE) changes from the plan
 
 **Output Options:**
 - `--verbose, -v`: Enable verbose output
@@ -421,11 +436,13 @@ lockstep apply PATH [OPTIONS]
 - `--add-columns/--no-add-columns`: Add missing columns from contract
 - `--add-descriptions/--no-add-descriptions`: Update descriptions from contract
 - `--add-constraints/--no-add-constraints`: Add constraints (PK, NOT NULL) from contract
+- `--add-permissions/--no-add-permissions`: Grant permissions from contract roles
 
 **Selective Sync - REMOVE Options (disabled by default for safety):**
 - `--remove-columns/--no-remove-columns`: Remove columns not in contract
 - `--remove-tags/--no-remove-tags`: Remove tags not in contract
 - `--remove-constraints/--no-remove-constraints`: Remove constraints not in contract
+- `--remove-permissions/--no-remove-permissions`: Revoke permissions not in contract roles
 
 **Override Options:**
 - `--catalog-override TEXT`: Override catalog name from contracts
@@ -562,6 +579,39 @@ The tool supports a subset of the ODCS specification focused on Unity Catalog sy
 | `tags` | object | Key-value tags for the table |
 | `certification` | enum | certified, deprecated, not_certified |
 
+### Roles (Permissions)
+
+Define access control for the table using the `roles` section:
+
+```yaml
+roles:
+  - principal: data_engineers
+    type: group
+    permissions:
+      - SELECT
+      - MODIFY
+  - principal: analyst@company.com
+    type: user
+    permissions:
+      - SELECT
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `principal` | string | Yes | User email or group name |
+| `type` | string | No | `user` or `group` (default: `group`) |
+| `permissions` | list | Yes | List of permissions to grant |
+
+**Supported Permissions:**
+
+| Permission | Description |
+|------------|-------------|
+| `SELECT` | Read data from the table |
+| `MODIFY` | Insert, update, delete data |
+| `ALL PRIVILEGES` | Full access to the table |
+| `APPLY TAG` | Apply tags to the table |
+| `READ_METADATA` | Read table metadata |
+
 ## Sync Behavior
 
 ### Idempotent Operations
@@ -579,9 +629,11 @@ By default, the tool will **ADD** but not **REMOVE**:
 | Update descriptions | ✅ Enabled | `--no-add-descriptions` |
 | Add/update tags | ✅ Enabled | `--no-add-tags` |
 | Add constraints | ✅ Enabled | `--no-add-constraints` |
+| Grant permissions | ✅ Enabled | `--no-add-permissions` |
 | Drop columns | ❌ Disabled | `--remove-columns` |
 | Remove tags | ❌ Disabled | `--remove-tags` |
 | Remove constraints | ❌ Disabled | `--remove-constraints` |
+| Revoke permissions | ❌ Disabled | `--remove-permissions` |
 
 ### Full Sync Mode
 
@@ -661,6 +713,78 @@ Type mismatch warnings have **no SQL** - they require manual intervention:
 -- Example: Change column type (may require data migration)
 ALTER TABLE main.sales.customers ALTER COLUMN id TYPE INT;
 ```
+
+## Permission Management
+
+Lockstep can manage table permissions (GRANT/REVOKE) based on roles defined in your contract. This allows you to define access control as code alongside your schema.
+
+### Defining Roles
+
+Add a `roles` section to your contract:
+
+```yaml
+roles:
+  - principal: data_engineers
+    type: group
+    permissions:
+      - SELECT
+      - MODIFY
+  - principal: data_analysts
+    type: group
+    permissions:
+      - SELECT
+  - principal: admin@company.com
+    type: user
+    permissions:
+      - ALL PRIVILEGES
+```
+
+### Plan Output
+
+The `plan` command shows both grants (🔓) and revokes (🔒):
+
+```
+╭───── 📋 customer_contract → main.sales.customers ──────╮
+│       Action             Target            Details     │
+│  🔓   Grant Permission   main.sales.cust…  principal=  │
+│                                            data_analy… │
+│                                            privilege=  │
+│                                            SELECT      │
+│  🔒   Revoke Permission  main.sales.cust…  principal=  │
+│                                            old_user,   │
+│                                            privilege=  │
+│                                            ALL PRIVIL… │
+│                                                        │
+│ Summary: 1 grant_permission, 1 revoke_permission      │
+│ ⚠️  Plan contains destructive changes                  │
+╰────────────────────────────────────────────────────────╯
+```
+
+### Safe by Default
+
+- **Grants are applied by default** (`--add-permissions` is enabled)
+- **Revokes require explicit opt-in** (`--remove-permissions` is disabled)
+
+```bash
+# Apply only grants (safe mode - default)
+lockstep apply contracts/
+
+# Apply grants AND revokes (full sync)
+lockstep apply contracts/ --remove-permissions
+```
+
+### Ignoring Permissions in Plan
+
+To exclude permission changes from the plan output:
+
+```bash
+lockstep plan contracts/ --ignore-permissions
+```
+
+### Prerequisites
+
+- The service principal or user running Lockstep must have `MANAGE` privilege on the table
+- Groups and users referenced in roles must exist in Unity Catalog
 
 ## JUnit XML Reports
 
