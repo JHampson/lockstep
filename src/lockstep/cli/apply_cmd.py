@@ -24,7 +24,6 @@ from lockstep.cli.common import (
     TablePrefixArg,
     TokenArg,
     VerboseArg,
-    console,
     ensure_databricks_config,
     error_console,
     load_contracts,
@@ -32,7 +31,13 @@ from lockstep.cli.common import (
     setup_logging,
     validate_output_format,
 )
-from lockstep.cli.output import present_apply_progress, present_apply_result, present_error
+from lockstep.cli.output import (
+    OutputOptions,
+    present_apply_progress,
+    present_apply_result,
+    present_error,
+    present_info,
+)
 from lockstep.databricks import DatabricksConnector
 from lockstep.models.catalog_state import SavedPlan
 from lockstep.services import ContractLoader
@@ -50,14 +55,21 @@ def _apply_saved_plan(
     token: str | None,
     client_id: str | None,
     client_secret: str | None,
-    verbose: bool,  # noqa: ARG001
-    quiet: bool,  # noqa: ARG001
+    verbose: bool,
+    quiet: bool,
     output_format: str,
     out: Path | None,
     profile: str | None = None,
 ) -> None:
     """Apply a saved plan file to Unity Catalog."""
-    console.print(f"\n[bold]Loading plan from:[/bold] {plan_path}")
+    output_options = OutputOptions(
+        format=output_format,
+        out_path=out,
+        quiet=quiet,
+        verbose=verbose,
+    )
+
+    present_info(f"\n[bold]Loading plan from:[/bold] {plan_path}", quiet=quiet)
 
     # Load the plan file
     try:
@@ -68,12 +80,15 @@ def _apply_saved_plan(
         error_console.print(f"[red]❌ Invalid plan file:[/red] {e}")
         raise typer.Exit(1) from None
 
-    console.print(f"[dim]Plan created: {saved_plan.created_at}[/dim]")
-    console.print(f"[dim]Original host: {saved_plan.host}[/dim]")
-    console.print(f"[dim]Plans: {len(saved_plan.plans)}, Actions: {saved_plan.total_actions}[/dim]")
+    present_info(f"[dim]Plan created: {saved_plan.created_at}[/dim]", quiet=quiet)
+    present_info(f"[dim]Original host: {saved_plan.host}[/dim]", quiet=quiet)
+    present_info(
+        f"[dim]Plans: {len(saved_plan.plans)}, Actions: {saved_plan.total_actions}[/dim]",
+        quiet=quiet,
+    )
 
     if not saved_plan.has_changes:
-        console.print("\n[green]✓ Plan has no changes to apply.[/green]")
+        present_info("\n[green]✓ Plan has no changes to apply.[/green]", quiet=quiet)
         return
 
     # Build configuration
@@ -92,17 +107,32 @@ def _apply_saved_plan(
     try:
         with DatabricksConnector(config) as connector:
             for plan in saved_plan.plans:
-                console.print(f"\n[bold]Applying plan for:[/bold] {plan.table_name}")
+                present_info(f"\n[bold]Applying plan for:[/bold] {plan.table_name}", quiet=quiet)
 
                 for action in plan.actions:
                     if action.sql:
                         try:
                             connector.execute(action.sql)
-                            present_apply_progress(action.description, success=True)
+                            present_apply_progress(
+                                action.description,
+                                success=True,
+                                quiet=quiet,
+                                verbose=verbose,
+                                sql=action.sql,
+                            )
                         except Exception as e:
-                            present_apply_progress(action.description, success=False, error=str(e))
+                            present_apply_progress(
+                                action.description,
+                                success=False,
+                                error=str(e),
+                                quiet=quiet,
+                            )
                     else:
-                        console.print(f"  [yellow]⚠[/yellow] {action.description} (no SQL)")
+                        present_apply_progress(
+                            action.description,
+                            success=True,
+                            quiet=quiet,
+                        )
 
         # Execute the action to get structured results
         result = execute_apply_saved_plan(saved_plan, config, str(plan_path))
@@ -112,7 +142,7 @@ def _apply_saved_plan(
         raise typer.Exit(1) from None
 
     # Present the results
-    present_apply_result(result, output_format, out)
+    present_apply_result(result, output_options)
 
     # Exit with error if any failures
     if not result.success:
@@ -225,6 +255,8 @@ def apply_contracts(
 
     Use --format to specify output format (table, json, junit).
     Use --out to write output to a file (in addition to displaying).
+    Use --verbose to show detailed progress.
+    Use --quiet to suppress informational messages.
 
     Examples:
 
@@ -240,11 +272,22 @@ def apply_contracts(
         # Output as JUnit XML to file
         $ lockstep apply contracts/ --format junit --out results.xml
 
+        # Quiet mode (only show errors)
+        $ lockstep apply contracts/ --quiet
+
         # Full sync - remove everything not in contract
         $ lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
     """
     setup_logging(verbose, quiet)
     output_format = validate_output_format(format)
+
+    # Create output options
+    output_options = OutputOptions(
+        format=output_format,
+        out_path=out,
+        quiet=quiet,
+        verbose=verbose,
+    )
 
     # Check if path is a saved plan file (JSON)
     if path.suffix.lower() == ".json" and path.is_file():
@@ -266,7 +309,7 @@ def apply_contracts(
 
     # Load contracts
     loader = ContractLoader()
-    contracts = load_contracts(path, loader)
+    contracts = load_contracts(path, loader, quiet=quiet)
 
     # Build configuration
     config = ensure_databricks_config(
@@ -299,7 +342,7 @@ def apply_contracts(
         raise typer.Exit(1)
 
     # Present the results
-    present_apply_result(result, output_format, out)
+    present_apply_result(result, output_options)
 
     # Exit with error if any sync failed
     if not result.success:

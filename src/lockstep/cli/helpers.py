@@ -132,12 +132,17 @@ def ensure_databricks_config(
         raise typer.Exit(1) from None
 
 
-def load_contracts(path: Path, loader: ContractLoader) -> list[Contract]:
+def load_contracts(
+    path: Path,
+    loader: ContractLoader,
+    quiet: bool = False,
+) -> list[Contract]:
     """Load contracts from a file or directory, with CLI output and error handling.
 
     Args:
         path: Path to YAML file or directory.
         loader: ContractLoader instance.
+        quiet: If True, suppress informational output (errors still shown).
 
     Returns:
         List of loaded contracts.
@@ -145,7 +150,8 @@ def load_contracts(path: Path, loader: ContractLoader) -> list[Contract]:
     Raises:
         typer.Exit: On load failure or no contracts found.
     """
-    console.print(f"\n[bold]Loading contracts from:[/bold] {path}")
+    if not quiet:
+        console.print(f"\n[bold]Loading contracts from:[/bold] {path}")
 
     if path.is_file():
         try:
@@ -162,14 +168,17 @@ def load_contracts(path: Path, loader: ContractLoader) -> list[Contract]:
             error_console.print(format_validation_report(loader.validation_errors))
             if not contracts:
                 raise typer.Exit(1)
-            console.print(
-                f"\n[yellow]⚠️  Continuing with {len(contracts)} valid contract(s)[/yellow]"
-            )
+            if not quiet:
+                console.print(
+                    f"\n[yellow]⚠️  Continuing with {len(contracts)} valid contract(s)[/yellow]"
+                )
 
     if not contracts:
-        console.print("[yellow]No contracts found.[/yellow]")
+        if not quiet:
+            console.print("[yellow]No contracts found.[/yellow]")
         raise typer.Exit(0)
 
-    console.print(f"[green]✓[/green] Loaded {len(contracts)} contract(s)\n")
+    if not quiet:
+        console.print(f"[green]✓[/green] Loaded {len(contracts)} contract(s)\n")
     return contracts
 

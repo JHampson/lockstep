@@ -25,14 +25,19 @@ from lockstep.cli.common import (
     TablePrefixArg,
     TokenArg,
     VerboseArg,
-    console,
     ensure_databricks_config,
     load_contracts,
     path_argument,
     setup_logging,
     validate_output_format,
 )
-from lockstep.cli.output import present_error, present_plan_result, present_plan_summary
+from lockstep.cli.output import (
+    OutputOptions,
+    present_error,
+    present_info,
+    present_plan_result,
+    present_plan_summary,
+)
 from lockstep.models.catalog_state import SavedPlan
 from lockstep.services import ContractLoader
 from lockstep.services.sync import SyncOptions
@@ -111,6 +116,8 @@ def plan_changes(
     Use --plan-out to save the plan to a file for later apply.
     Use --format to specify output format (table, json, junit).
     Use --out to write output to a file (in addition to displaying).
+    Use --verbose to show SQL statements.
+    Use --quiet to suppress informational messages.
 
     Authentication types:
     - profile: Use Databricks CLI profile from ~/.databrickscfg (recommended)
@@ -140,15 +147,26 @@ def plan_changes(
         # Output as JUnit XML to file
         $ lockstep plan contracts/ --format junit --out results.xml
 
-        # Ignore tag changes
-        $ lockstep plan contracts/ --ignore-tags
+        # Verbose output with SQL
+        $ lockstep plan contracts/ --verbose
+
+        # Quiet mode (only show changes, errors)
+        $ lockstep plan contracts/ --quiet
     """
     setup_logging(verbose, quiet)
     output_format = validate_output_format(format)
 
+    # Create output options
+    output_options = OutputOptions(
+        format=output_format,
+        out_path=out,
+        quiet=quiet,
+        verbose=verbose,
+    )
+
     # Load contracts
     loader = ContractLoader()
-    contracts = load_contracts(path, loader)
+    contracts = load_contracts(path, loader, quiet=quiet)
 
     # Build configuration
     config = ensure_databricks_config(
@@ -181,7 +199,7 @@ def plan_changes(
         raise typer.Exit(1)
 
     # Present the results
-    present_plan_result(result, output_format, out)
+    present_plan_result(result, output_options)
 
     # Save plan to file if requested
     if plan_out and result.plans_to_save:
@@ -193,11 +211,11 @@ def plan_changes(
         )
         with open(plan_out, "w") as f:
             json.dump(saved_plan.to_dict(), f, indent=2)
-        console.print(f"\n[green]✓[/green] Plan saved to: {plan_out}")
-        console.print(f"[dim]Apply this plan with: lockstep apply {plan_out}[/dim]")
+        present_info(f"\n[green]✓[/green] Plan saved to: {plan_out}", quiet=quiet)
+        present_info(f"[dim]Apply this plan with: lockstep apply {plan_out}[/dim]", quiet=quiet)
 
     # Present summary and exit with appropriate code
-    present_plan_summary(result)
+    present_plan_summary(result, quiet=quiet)
 
     if result.has_changes:
         raise typer.Exit(2)

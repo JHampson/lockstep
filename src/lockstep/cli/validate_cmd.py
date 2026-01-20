@@ -11,12 +11,17 @@ from lockstep.cli.actions import execute_validate
 from lockstep.cli.common import (
     FormatArg,
     OutputArg,
+    QuietArg,
     VerboseArg,
-    console,
     setup_logging,
     validate_output_format,
 )
-from lockstep.cli.output import present_validate_result, present_validate_summary
+from lockstep.cli.output import (
+    OutputOptions,
+    present_info,
+    present_validate_result,
+    present_validate_summary,
+)
 from lockstep.services import ContractLoader
 
 # Create the validate command app
@@ -36,6 +41,7 @@ def validate(
     format: FormatArg = None,
     out: OutputArg = None,
     verbose: VerboseArg = False,
+    quiet: QuietArg = False,
 ) -> None:
     """Validate ODCS contract YAML files without connecting to Databricks.
 
@@ -46,6 +52,8 @@ def validate(
 
     Use --format to specify output format (table, json, junit).
     Use --out to write output to a file (in addition to displaying).
+    Use --verbose to show all error details.
+    Use --quiet to suppress informational messages (errors still shown).
 
     Examples:
 
@@ -60,11 +68,22 @@ def validate(
 
         # Output as JUnit XML to file
         $ lockstep validate contracts/ --format junit --out validation.xml
+
+        # Quiet mode (only show failures)
+        $ lockstep validate contracts/ --quiet
     """
-    setup_logging(verbose, quiet=False)
+    setup_logging(verbose, quiet)
     output_format = validate_output_format(format)
 
-    console.print(f"\n[bold]Validating contracts in:[/bold] {path}\n")
+    # Create output options
+    output_options = OutputOptions(
+        format=output_format,
+        out_path=out,
+        quiet=quiet,
+        verbose=verbose,
+    )
+
+    present_info(f"\n[bold]Validating contracts in:[/bold] {path}\n", quiet=quiet)
 
     # Execute the validate action
     loader = ContractLoader()
@@ -72,14 +91,14 @@ def validate(
 
     # Handle empty results
     if result.total == 0:
-        console.print("[yellow]No YAML files found.[/yellow]")
+        present_info("[yellow]No YAML files found.[/yellow]", quiet=quiet)
         raise typer.Exit(0)
 
     # Present the results
-    present_validate_result(result, output_format, out)
+    present_validate_result(result, output_options)
 
     # Present summary
-    present_validate_summary(result)
+    present_validate_summary(result, quiet=quiet)
 
     # Exit with error if any validation failed
     if not result.success:
