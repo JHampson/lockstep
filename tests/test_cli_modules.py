@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime
-from io import StringIO
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from rich.console import Console
 
 from lockstep.cli.actions import (
     ApplyResult,
@@ -29,29 +25,21 @@ from lockstep.cli.helpers import (
     ConnectionOptions,
     LoadContractsResult,
     build_databricks_config,
-    find_yaml_files,
-    load_contracts_from_path,
     validate_databricks_config,
     validate_output_format,
 )
 from lockstep.cli.output import (
     OutputOptions,
     present_apply_progress,
-    present_apply_result,
     present_config_error,
     present_contract_load_error,
     present_error,
     present_info,
-    present_plan_result,
     present_plan_summary,
-    present_validate_result,
     present_validate_summary,
 )
 from lockstep.databricks.config import AuthType
-from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
 from lockstep.services import ContractLoadError
-from lockstep.services.sync import SyncResult
-
 
 # ============================================================================
 # Tests for exceptions.py
@@ -266,49 +254,6 @@ class TestValidateDatabricksConfig:
             validate_databricks_config(config)
 
 
-class TestFindYamlFiles:
-    """Tests for find_yaml_files function."""
-
-    def test_single_file(self, tmp_path: Path) -> None:
-        """Test with a single file path."""
-        file = tmp_path / "test.yaml"
-        file.write_text("test: true")
-        result = find_yaml_files(file)
-        assert result == [file]
-
-    def test_directory_yaml(self, tmp_path: Path) -> None:
-        """Test finds .yaml files in directory."""
-        (tmp_path / "a.yaml").write_text("a: 1")
-        (tmp_path / "b.yaml").write_text("b: 2")
-        result = find_yaml_files(tmp_path)
-        assert len(result) == 2
-        assert all(f.suffix == ".yaml" for f in result)
-
-    def test_directory_yml(self, tmp_path: Path) -> None:
-        """Test finds .yml files in directory."""
-        (tmp_path / "a.yml").write_text("a: 1")
-        result = find_yaml_files(tmp_path)
-        assert len(result) == 1
-        assert result[0].suffix == ".yml"
-
-    def test_sorted_results(self, tmp_path: Path) -> None:
-        """Test results are sorted."""
-        (tmp_path / "z.yaml").write_text("z: 1")
-        (tmp_path / "a.yaml").write_text("a: 1")
-        result = find_yaml_files(tmp_path)
-        assert result[0].name == "a.yaml"
-        assert result[1].name == "z.yaml"
-
-    def test_recursive(self, tmp_path: Path) -> None:
-        """Test finds files in subdirectories."""
-        subdir = tmp_path / "sub"
-        subdir.mkdir()
-        (tmp_path / "root.yaml").write_text("root: 1")
-        (subdir / "nested.yaml").write_text("nested: 1")
-        result = find_yaml_files(tmp_path)
-        assert len(result) == 2
-
-
 class TestConnectionOptions:
     """Tests for ConnectionOptions dataclass."""
 
@@ -497,9 +442,8 @@ class TestOutputOptions:
 class TestPresentError:
     """Tests for present_error function."""
 
-    def test_prints_error_message(self, capsys: pytest.CaptureFixture[str]) -> None:
+    def test_prints_error_message(self) -> None:
         """Test error message is printed."""
-        # Use a fresh console that writes to our capture
         with patch("lockstep.cli.output.error_console") as mock_console:
             mock_console.print = MagicMock()
             present_error("Something went wrong")
@@ -710,10 +654,12 @@ class TestPresentContractLoadError:
 class TestExecuteValidate:
     """Tests for execute_validate function."""
 
-    def test_empty_files_list(self) -> None:
-        """Test with no files."""
+    def test_empty_directory(self, tmp_path: Path) -> None:
+        """Test with no YAML files."""
         loader = MagicMock()
-        result = execute_validate([], Path("/test"), loader)
+        loader._find_yaml_files.return_value = iter([])
+
+        result = execute_validate(tmp_path, loader)
         assert result.success is True
         assert result.total == 0
 
@@ -723,9 +669,10 @@ class TestExecuteValidate:
         file.write_text("kind: DataContract\nid: test")
 
         loader = MagicMock()
+        loader._find_yaml_files.return_value = iter([file])
         loader.validate_file.return_value = (True, [])
 
-        result = execute_validate([file], tmp_path, loader)
+        result = execute_validate(tmp_path, loader)
         assert result.total == 1
         assert result.valid_count == 1
         assert result.invalid_count == 0
@@ -736,9 +683,10 @@ class TestExecuteValidate:
         file.write_text("invalid")
 
         loader = MagicMock()
+        loader._find_yaml_files.return_value = iter([file])
         loader.validate_file.return_value = (False, ["Missing required field"])
 
-        result = execute_validate([file], tmp_path, loader)
+        result = execute_validate(tmp_path, loader)
         assert result.total == 1
         assert result.valid_count == 0
         assert result.invalid_count == 1
@@ -752,12 +700,13 @@ class TestExecuteValidate:
         invalid_file.write_text("invalid")
 
         loader = MagicMock()
+        loader._find_yaml_files.return_value = iter([invalid_file, valid_file])
         loader.validate_file.side_effect = [
-            (False, ["Error"]),  # invalid.yaml (sorted first)
+            (False, ["Error"]),  # invalid.yaml
             (True, []),  # valid.yaml
         ]
 
-        result = execute_validate([invalid_file, valid_file], tmp_path, loader)
+        result = execute_validate(tmp_path, loader)
         assert result.total == 2
         assert result.valid_count == 1
         assert result.invalid_count == 1

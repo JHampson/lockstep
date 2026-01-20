@@ -140,8 +140,8 @@ class ContractLoader:
                 errors=errors,
             ) from e
 
-    def load_many(self, path: Path) -> list[Contract]:
-        """Load multiple contracts from a path.
+    def load(self, path: Path, *, fail_fast: bool = False) -> list[Contract]:
+        """Load contracts from a file or directory.
 
         Handles:
         - Single file with one contract
@@ -150,9 +150,13 @@ class ContractLoader:
 
         Args:
             path: File, directory, or glob pattern.
+            fail_fast: If True, raise on first error. If False, accumulate errors.
 
         Returns:
             List of validated contracts.
+
+        Raises:
+            ContractLoadError: If fail_fast=True and an error occurs.
         """
         self.clear_errors()
         contracts: list[Contract] = []
@@ -177,6 +181,8 @@ class ContractLoader:
                             path=yaml_path,
                             errors=errors,
                         )
+                        if fail_fast:
+                            raise error from e
                         self._validation_errors.append(error)
                         logger.error(f"Validation error in {yaml_path}: {error}")
 
@@ -186,6 +192,8 @@ class ContractLoader:
                     path=yaml_path,
                     errors=[str(e)],
                 )
+                if fail_fast:
+                    raise error from e
                 self._validation_errors.append(error)
                 logger.error(f"YAML error in {yaml_path}: {e}")
 
@@ -195,10 +203,19 @@ class ContractLoader:
                     path=yaml_path,
                     errors=[str(e)],
                 )
+                if fail_fast:
+                    raise error from e
                 self._validation_errors.append(error)
                 logger.error(f"IO error reading {yaml_path}: {e}")
 
         return contracts
+
+    def load_many(self, path: Path) -> list[Contract]:
+        """Load multiple contracts from a path (alias for load()).
+
+        Deprecated: Use load() instead.
+        """
+        return self.load(path)
 
     def validate_file(self, path: Path) -> tuple[bool, list[str]]:
         """Validate a contract file without fully loading it.
