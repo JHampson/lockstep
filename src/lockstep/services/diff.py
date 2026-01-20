@@ -156,16 +156,22 @@ class DiffService:
 
                 # Normalize common type aliases for comparison
                 if not self._types_match(contract_type, current_type):
+                    # Generate SQL to alter the column type
+                    sql = self.sql_gen.alter_column_type(
+                        full_table_name=full_table_name,
+                        column_name=col.name,
+                        new_type=col.get_databricks_type(),
+                    )
                     plan.actions.append(
                         SyncAction(
-                            action_type=ActionType.TYPE_MISMATCH,
+                            action_type=ActionType.UPDATE_COLUMN_TYPE,
                             target=f"{full_table_name}.{col.name}",
-                            description=f"Type mismatch for column {col.name}: contract={contract_type}, catalog={current_type}",
-                            sql=None,  # No SQL - manual intervention required
+                            description=f"Alter column {col.name} type: {current_type} → {contract_type}",
+                            sql=sql,
                             details={
                                 "column": col.name,
-                                "contract_type": contract_type,
-                                "catalog_type": current_type,
+                                "from_type": current_type,
+                                "to_type": contract_type,
                             },
                         )
                     )

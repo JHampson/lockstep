@@ -266,7 +266,7 @@ class TestDiffService:
         assert plan.table_name == "dev.staging.test_customers"
 
     def test_diff_type_mismatch(self, diff_service: DiffService) -> None:
-        """Test diff detects column type mismatches."""
+        """Test diff detects column type mismatches and generates ALTER COLUMN actions."""
         # Contract defines customer_id as STRING, amount as DOUBLE
         contract = Contract.model_validate(
             {
@@ -294,22 +294,25 @@ class TestDiffService:
 
         plan = diff_service.compute_diff(contract, catalog_state)
 
-        # Should have type mismatch warnings
-        type_mismatch_actions = [
-            a for a in plan.actions if a.action_type == ActionType.TYPE_MISMATCH
+        # Should have UPDATE_COLUMN_TYPE actions (not warnings anymore)
+        type_change_actions = [
+            a for a in plan.actions if a.action_type == ActionType.UPDATE_COLUMN_TYPE
         ]
-        assert len(type_mismatch_actions) == 2
+        assert len(type_change_actions) == 2
 
         # Check details are captured
-        customer_mismatch = next(
-            a for a in type_mismatch_actions if a.details.get("column") == "customer_id"
+        customer_change = next(
+            a for a in type_change_actions if a.details.get("column") == "customer_id"
         )
-        assert customer_mismatch.details["contract_type"] == "STRING"
-        assert customer_mismatch.details["catalog_type"] == "INT"
-        assert customer_mismatch.sql is None  # No SQL for warnings
+        assert customer_change.details["to_type"] == "STRING"
+        assert customer_change.details["from_type"] == "INT"
+        # Should have SQL now (destructive action)
+        assert customer_change.sql is not None
+        assert "ALTER COLUMN" in customer_change.sql
+        assert "TYPE STRING" in customer_change.sql
 
-        # Plan should report warnings
-        assert plan.has_warnings is True
+        # Plan should have destructive changes (UPDATE_COLUMN_TYPE is destructive)
+        assert plan.has_destructive_changes is True
 
     def test_diff_type_aliases_match(self, diff_service: DiffService) -> None:
         """Test that non-parameterized type aliases are treated as equivalent."""
@@ -342,15 +345,14 @@ class TestDiffService:
 
         plan = diff_service.compute_diff(contract, catalog_state)
 
-        # Should NOT have type mismatch warnings (non-parameterized aliases are equivalent)
-        type_mismatch_actions = [
-            a for a in plan.actions if a.action_type == ActionType.TYPE_MISMATCH
+        # Should NOT have type change actions (non-parameterized aliases are equivalent)
+        type_change_actions = [
+            a for a in plan.actions if a.action_type == ActionType.UPDATE_COLUMN_TYPE
         ]
-        assert len(type_mismatch_actions) == 0
-        assert plan.has_warnings is False
+        assert len(type_change_actions) == 0
 
-    def test_diff_type_warns_on_parameterized(self, diff_service: DiffService) -> None:
-        """Test that parameterized types trigger warnings even when base types match."""
+    def test_diff_type_change_on_parameterized(self, diff_service: DiffService) -> None:
+        """Test that parameterized types trigger type change actions even when base types match."""
         # Contract uses STRING
         contract = Contract.model_validate(
             {
@@ -376,14 +378,15 @@ class TestDiffService:
 
         plan = diff_service.compute_diff(contract, catalog_state)
 
-        # SHOULD have type mismatch warning (parameterized type differs)
-        type_mismatch_actions = [
-            a for a in plan.actions if a.action_type == ActionType.TYPE_MISMATCH
+        # SHOULD have type change action (parameterized type differs)
+        type_change_actions = [
+            a for a in plan.actions if a.action_type == ActionType.UPDATE_COLUMN_TYPE
         ]
-        assert len(type_mismatch_actions) == 1
-        assert plan.has_warnings is True
-        assert type_mismatch_actions[0].details["contract_type"] == "STRING"
-        assert type_mismatch_actions[0].details["catalog_type"] == "VARCHAR(100)"
+        assert len(type_change_actions) == 1
+        assert plan.has_destructive_changes is True
+        assert type_change_actions[0].details["to_type"] == "STRING"
+        assert type_change_actions[0].details["from_type"] == "VARCHAR(100)"
+        assert type_change_actions[0].sql is not None
 
     def test_types_match_direct(self, diff_service: DiffService) -> None:
         """Test _types_match for direct type equality."""
@@ -614,3 +617,27 @@ class TestSyncPlan:
                 ActionType.DROP_PRIMARY_KEY,
                 ActionType.DROP_NOT_NULL,
             )
+
+    def test_filter_no_alter_column_types(self) -> None:
+        """Test filtering out column type change actions."""
+        from lockstep.models.catalog_state import SyncAction, SyncPlan
+
+        plan = SyncPlan(
+            contract_name="test",
+            table_name="cat.sch.tbl",
+            actions=[
+                SyncAction(
+                    ActionType.UPDATE_COLUMN_TYPE,
+                    "cat.sch.tbl.col1",
+                    "Alter column type",
+                    sql="ALTER TABLE cat.sch.tbl ALTER COLUMN col1 SET DATA TYPE STRING",
+                ),
+                SyncAction(ActionType.ADD_COLUMN, "cat.sch.tbl.col2", "Add column"),
+                SyncAction(ActionType.DROP_COLUMN, "cat.sch.tbl.col3", "Drop column"),
+            ],
+        )
+
+        filtered = plan.filter_no_alter_column_types()
+        assert len(filtered.actions) == 2
+        for action in filtered.actions:
+            assert action.action_type != ActionType.UPDATE_COLUMN_TYPE
