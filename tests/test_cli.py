@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from lockstep.cli.main import _get_databricks_config, app
+from lockstep.cli.helpers import get_databricks_config
+from lockstep.cli.main import app
 from lockstep.databricks.config import AuthType
 from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
 from lockstep.services.sync import SyncResult
@@ -81,8 +82,8 @@ class TestPlanCommand:
     def test_plan_no_changes(self, tmp_contract_file: Path) -> None:
         """Test plan when no changes needed."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.plan_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.plan_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -126,8 +127,8 @@ class TestPlanCommand:
     def test_plan_with_changes(self, tmp_contract_file: Path) -> None:
         """Test plan when changes are detected."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.plan_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.plan_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -220,8 +221,8 @@ class TestApplyCommand:
     def test_apply_success(self, tmp_contract_file: Path) -> None:
         """Test successful apply."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -260,8 +261,8 @@ class TestApplyCommand:
     def test_apply_with_overrides(self, tmp_contract_file: Path) -> None:
         """Test apply with catalog/schema overrides."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -307,8 +308,8 @@ class TestApplyCommand:
     def test_apply_remove_columns(self, tmp_contract_file: Path) -> None:
         """Test --remove-columns flag."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -346,8 +347,8 @@ class TestApplyCommand:
     def test_apply_remove_tags(self, tmp_contract_file: Path) -> None:
         """Test --remove-tags flag."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -385,8 +386,8 @@ class TestApplyCommand:
     def test_apply_no_add_columns(self, tmp_contract_file: Path) -> None:
         """Test --no-add-columns flag."""
         with (
-            patch("lockstep.cli.main.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.main.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -423,11 +424,11 @@ class TestApplyCommand:
 
 
 class TestGetDatabricksConfig:
-    """Tests for _get_databricks_config helper."""
+    """Tests for get_databricks_config helper."""
 
     def test_default_auth_type_is_oauth(self) -> None:
         """Test that default auth type is OAuth."""
-        config = _get_databricks_config(
+        config = get_databricks_config(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type=None,
@@ -439,7 +440,7 @@ class TestGetDatabricksConfig:
 
     def test_pat_auth_type(self) -> None:
         """Test PAT authentication type."""
-        config = _get_databricks_config(
+        config = get_databricks_config(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type="pat",
@@ -452,7 +453,7 @@ class TestGetDatabricksConfig:
 
     def test_sp_auth_type(self) -> None:
         """Test Service Principal authentication type."""
-        config = _get_databricks_config(
+        config = get_databricks_config(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type="sp",
@@ -466,7 +467,7 @@ class TestGetDatabricksConfig:
 
     def test_auth_type_case_insensitive(self) -> None:
         """Test that auth type is case insensitive."""
-        config = _get_databricks_config(
+        config = get_databricks_config(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type="PAT",
@@ -494,7 +495,8 @@ class TestHelpMessages:
         result = runner.invoke(app, ["plan", "--help"])
         assert result.exit_code == 0
         output = strip_ansi(result.stdout)
-        assert "--junit-xml" in output
+        assert "--format" in output
+        assert "--out" in output
         assert "--catalog-override" in output
         assert "--auth-type" in output
 
