@@ -2,12 +2,14 @@
 
 Supports configuration via:
 - CLI parameters (highest precedence)
+- Databricks CLI profile (~/.databrickscfg)
 - Environment variables
 - Config file (~/.lockstep.toml or ~/.lockstep.yaml) (lowest precedence)
 """
 
 from __future__ import annotations
 
+import configparser
 import contextlib
 import os
 from enum import Enum
@@ -25,6 +27,45 @@ class AuthType(str, Enum):
     OAUTH = "oauth"  # Interactive OAuth / Databricks CLI / Azure CLI
     PAT = "pat"  # Personal Access Token
     SP = "sp"  # Service Principal (OAuth M2M)
+    PROFILE = "profile"  # Use Databricks CLI profile
+
+
+def _load_databricks_profile(profile_name: str | None = None) -> dict[str, Any]:
+    """Load configuration from Databricks CLI profile (~/.databrickscfg).
+
+    Args:
+        profile_name: Profile name to load. If None, uses DEFAULT.
+
+    Returns:
+        Dict with host, token, and auth_type from the profile.
+    """
+    config_path = Path.home() / ".databrickscfg"
+    if not config_path.exists():
+        return {}
+
+    config = configparser.ConfigParser()
+    config.read(config_path)
+
+    section = profile_name or "DEFAULT"
+    if section not in config:
+        return {}
+
+    result: dict[str, Any] = {}
+    if config.has_option(section, "host"):
+        host = config.get(section, "host")
+        # Ensure host has https:// prefix
+        if host and not host.startswith(("http://", "https://")):
+            host = f"https://{host}"
+        result["host"] = host
+
+    if config.has_option(section, "token"):
+        result["token"] = config.get(section, "token")
+
+    # Check for auth_type in the profile
+    if config.has_option(section, "auth_type"):
+        result["auth_type"] = config.get(section, "auth_type")
+
+    return result
 
 
 def _load_config_file() -> dict[str, Any]:
@@ -41,7 +82,7 @@ def _load_config_file() -> dict[str, Any]:
                 try:
                     import tomllib
                 except ImportError:
-                    import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+                    import tomli as tomllib  # type: ignore[no-redef]
                 with open(config_path, "rb") as f:
                     return tomllib.load(f)
             else:
@@ -56,14 +97,21 @@ class DatabricksConfig(BaseSettings):
 
     Configuration is loaded from (in order of precedence):
     1. CLI parameters (passed directly)
-    2. Environment variables (DATABRICKS_*)
-    3. Config file (~/.lockstep.yaml or ~/.lockstep.toml)
+    2. Databricks CLI profile (~/.databrickscfg) if --profile specified
+    3. Environment variables (DATABRICKS_*)
+    4. Config file (~/.lockstep.yaml or ~/.lockstep.toml)
     """
 
     model_config = SettingsConfigDict(
         env_prefix="DATABRICKS_",
         env_file=".env",
         extra="ignore",
+    )
+
+    # Databricks CLI profile (alternative to explicit host/token)
+    profile: str | None = Field(
+        default=None,
+        description="Databricks CLI profile name from ~/.databrickscfg",
     )
 
     # Required connection parameters
@@ -79,7 +127,7 @@ class DatabricksConfig(BaseSettings):
     # Authentication type
     auth_type: AuthType = Field(
         default=AuthType.OAUTH,
-        description="Authentication type: oauth, pat, or sp",
+        description="Authentication type: oauth, pat, sp, or profile",
     )
 
     # Token for PAT authentication
@@ -121,7 +169,28 @@ class DatabricksConfig(BaseSettings):
     @model_validator(mode="before")
     @classmethod
     def load_from_config_file(cls, values: dict[str, Any]) -> dict[str, Any]:
-        """Load values from config file for any missing settings."""
+        """Load values from config file and Databricks profile for any missing settings."""
+        # First, load from Databricks CLI profile if specified
+        profile_name = values.get("profile")
+        if profile_name:
+            profile_config = _load_databricks_profile(profile_name)
+            # Load host from profile if not explicitly provided
+            if (not values.get("host")) and profile_config.get("host"):
+                values["host"] = profile_config["host"]
+            # Determine auth type from profile
+            if not values.get("auth_type"):
+                if profile_config.get("token"):
+                    # Profile has a token, use PAT auth
+                    values["token"] = profile_config["token"]
+                    values["auth_type"] = AuthType.PAT
+                elif profile_config.get("auth_type") in ("databricks-cli", "oauth-m2m"):
+                    # Profile uses Databricks CLI OAuth or M2M OAuth
+                    values["auth_type"] = AuthType.OAUTH
+                else:
+                    # Default to OAuth for profiles without explicit token
+                    values["auth_type"] = AuthType.OAUTH
+
+        # Then load from lockstep config file
         file_config = _load_config_file()
 
         # Map config file keys to model fields
@@ -136,6 +205,7 @@ class DatabricksConfig(BaseSettings):
             "schema_default": "schema_default",
             "timeout_seconds": "timeout_seconds",
             "retry_count": "retry_count",
+            "profile": "profile",
         }
 
         for file_key, model_key in key_mapping.items():
@@ -156,6 +226,10 @@ class DatabricksConfig(BaseSettings):
         if not self.http_path:
             self.http_path = os.getenv("DATABRICKS_HTTP_PATH", "")
 
+        # Normalize http_path - accept warehouse ID or full path
+        if self.http_path:
+            self.http_path = self._normalize_http_path(self.http_path)
+
         # Check auth_type from environment if not set
         env_auth_type = os.getenv("DATABRICKS_AUTH_TYPE")
         if env_auth_type:
@@ -163,6 +237,26 @@ class DatabricksConfig(BaseSettings):
                 self.auth_type = AuthType(env_auth_type.lower())
 
         return self
+
+    @staticmethod
+    def _normalize_http_path(http_path: str) -> str:
+        """Normalize http_path to full path format.
+
+        Accepts:
+        - Warehouse ID: d46d90fb53d76376
+        - Full path: /sql/1.0/warehouses/d46d90fb53d76376
+
+        Returns:
+            Full path format: /sql/1.0/warehouses/<id>
+        """
+        http_path = http_path.strip()
+
+        # If it already looks like a path, return as-is
+        if "/" in http_path:
+            return http_path
+
+        # Otherwise, assume it's a warehouse ID and construct the path
+        return f"/sql/1.0/warehouses/{http_path}"
 
     def is_configured(self) -> bool:
         """Check if the configuration has required values."""
@@ -177,6 +271,8 @@ class DatabricksConfig(BaseSettings):
 
     def get_auth_description(self) -> str:
         """Return a human-readable description of the authentication being used."""
+        if self.profile:
+            return f"Databricks CLI profile '{self.profile}'"
         if self.auth_type == AuthType.SP:
             return "Service Principal"
         if self.auth_type == AuthType.PAT:

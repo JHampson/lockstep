@@ -6,6 +6,7 @@ Provides a clean interface for executing SQL against Databricks SQL endpoints.
 from __future__ import annotations
 
 import logging
+import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
@@ -18,6 +19,9 @@ if TYPE_CHECKING:
     from databricks.sql.client import Connection, Cursor
 
 logger = logging.getLogger(__name__)
+
+# Default connection timeout in seconds
+CONNECTION_TIMEOUT = 30
 
 
 class DatabricksConnectionError(Exception):
@@ -65,6 +69,7 @@ class DatabricksConnector:
         kwargs: dict[str, Any] = {
             "server_hostname": self.config.host.replace("https://", "").replace("http://", ""),
             "http_path": self.config.http_path,
+            "_socket_timeout": 30,  # Connection timeout in seconds
         }
 
         auth_type = self.config.auth_type
@@ -161,20 +166,58 @@ class DatabricksConnector:
             Active database connection.
 
         Raises:
-            DatabricksConnectionError: If connection fails.
+            DatabricksConnectionError: If connection fails or times out.
         """
         if self._connection is not None:
             return self._connection
 
         try:
             kwargs = self._get_connection_kwargs()
-            self._connection = databricks_sql.connect(**kwargs)
+            self._connection = self._connect_with_timeout(kwargs)
             logger.info(f"Connected to Databricks at {self.config.host}")
             return self._connection
         except DatabricksConnectionError:
             raise
         except Exception as e:
             raise DatabricksConnectionError(f"Failed to connect to Databricks: {e}") from e
+
+    def _connect_with_timeout(self, kwargs: dict[str, Any]) -> Connection:
+        """Connect with a timeout to prevent hanging on invalid endpoints.
+
+        Uses signal-based timeout on Unix, threading-based on Windows.
+        """
+        timeout = (
+            self.config.timeout_seconds if self.config.timeout_seconds < 60 else CONNECTION_TIMEOUT
+        )
+
+        # Use threading-based timeout (works on all platforms)
+        result: list[Connection | Exception] = []
+
+        def connect_thread() -> None:
+            try:
+                conn = databricks_sql.connect(**kwargs)
+                result.append(conn)
+            except Exception as e:
+                result.append(e)
+
+        thread = threading.Thread(target=connect_thread, daemon=True)
+        thread.start()
+        thread.join(timeout=timeout)
+
+        if thread.is_alive():
+            # Connection is still trying - it's hanging
+            raise DatabricksConnectionError(
+                f"Connection timed out after {timeout} seconds. "
+                f"Please verify the SQL endpoint ID is correct: {self.config.http_path}"
+            )
+
+        if not result:
+            raise DatabricksConnectionError("Connection failed with no response")
+
+        if isinstance(result[0], Exception):
+            raise result[0]
+
+        return result[0]
 
     def close(self) -> None:
         """Close the database connection."""

@@ -44,11 +44,12 @@ ACTION_STYLES = {
 }
 
 
-def format_plan(plan: SyncPlan) -> Panel:
+def format_plan(plan: SyncPlan, show_sql: bool = False) -> Panel:
     """Format a sync plan for display.
 
     Args:
         plan: The sync plan to format.
+        show_sql: If True, include SQL statements in the output.
 
     Returns:
         Rich Panel containing the formatted plan.
@@ -65,6 +66,8 @@ def format_plan(plan: SyncPlan) -> Panel:
     table.add_column("Action", style="cyan")
     table.add_column("Target")
     table.add_column("Details", style="dim")
+    if show_sql:
+        table.add_column("SQL", style="dim")
 
     for action in plan.actions:
         icon, color = ACTION_STYLES.get(action.action_type.value, ("•", "white"))
@@ -77,7 +80,14 @@ def format_plan(plan: SyncPlan) -> Panel:
             detail_parts = [f"{k}={v}" for k, v in action.details.items()]
             details = ", ".join(detail_parts)
 
-        table.add_row(icon, action_text, action.target, details)
+        if show_sql:
+            sql_text = action.sql or ""
+            # Truncate long SQL for display
+            if len(sql_text) > 60:
+                sql_text = sql_text[:57] + "..."
+            table.add_row(icon, action_text, action.target, details, sql_text)
+        else:
+            table.add_row(icon, action_text, action.target, details)
 
     # Add summary
     summary = plan.get_summary()

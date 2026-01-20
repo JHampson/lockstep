@@ -140,17 +140,51 @@ uv run pyinstaller --onefile --name lockstep --clean src/lockstep/cli/main.py
 
 ## Authentication
 
-The tool supports multiple authentication methods for **AWS**, **Azure**, and **GCP** Databricks via the `--auth-type` argument.
+The tool supports multiple authentication methods for **AWS**, **Azure**, and **GCP** Databricks.
 
-**Precedence order:** CLI parameters → Environment variables → Config file
+**Precedence order:** CLI parameters → Databricks CLI profile → Environment variables → Config file
 
 ### Authentication Types
 
 | Type | Description | Required Options |
 |------|-------------|------------------|
+| `profile` | Databricks CLI profile (~/.databrickscfg) | `--profile` |
 | `oauth` | Interactive OAuth (Databricks CLI, Azure CLI) | None (default) |
 | `pat` | Personal Access Token | `--token` |
 | `sp` | Service Principal / OAuth M2M | `--client-id`, `--client-secret` |
+
+### Databricks CLI Profile (Recommended)
+
+Use the `--profile` option to read authentication from your Databricks CLI configuration (`~/.databrickscfg`). This is the simplest approach if you already use the Databricks CLI:
+
+```bash
+# First, authenticate with Databricks CLI
+databricks auth login --host https://your-workspace.databricks.com --profile my-workspace
+
+# Then use the profile with lockstep
+lockstep plan contracts/ \
+  --profile my-workspace \
+  --sql-endpoint "/sql/1.0/warehouses/xxx"
+
+# Or use the environment variable
+export DATABRICKS_CONFIG_PROFILE=my-workspace
+lockstep plan contracts/ --sql-endpoint "/sql/1.0/warehouses/xxx"
+```
+
+The `--profile` option reads the `host` and authentication settings from `~/.databrickscfg`:
+
+```ini
+# ~/.databrickscfg
+[my-workspace]
+host = https://your-workspace.databricks.com
+auth_type = databricks-cli
+
+[production]
+host = https://prod-workspace.databricks.com
+token = dapi_your_token_here
+```
+
+> **Note:** The `--sql-endpoint` option accepts either the full path (`/sql/1.0/warehouses/abc123`) or just the warehouse ID (`abc123`). Lockstep will automatically normalize it to the full path.
 
 ### OAuth (Default)
 
@@ -338,6 +372,12 @@ lockstep validate contracts/customers.yaml
 ### 3. Preview Changes (Plan)
 
 ```bash
+# Using Databricks CLI profile (recommended)
+lockstep plan contracts/customers.yaml \
+  --profile my-workspace \
+  --sql-endpoint "abc123"
+
+# Or with explicit host
 lockstep plan contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx"
@@ -346,6 +386,12 @@ lockstep plan contracts/customers.yaml \
 ### 4. Apply Changes
 
 ```bash
+# Using Databricks CLI profile (recommended)
+lockstep apply contracts/customers.yaml \
+  --profile my-workspace \
+  --sql-endpoint "abc123"
+
+# Or with explicit host
 lockstep apply contracts/customers.yaml \
   --host "https://your-workspace.databricks.com" \
   --sql-endpoint "/sql/1.0/warehouses/xxx"
@@ -365,8 +411,9 @@ lockstep plan PATH [OPTIONS]
 - `PATH`: Path to YAML file or directory containing contract files
 
 **Connection Options:**
-- `--host TEXT`: Databricks workspace host URL
-- `--sql-endpoint TEXT`: SQL warehouse endpoint path (e.g., `/sql/1.0/warehouses/xxx`)
+- `--profile, -p TEXT`: Databricks CLI profile name from `~/.databrickscfg` (recommended)
+- `--host TEXT`: Databricks workspace host URL (not required if `--profile` is set)
+- `--sql-endpoint TEXT`: SQL warehouse endpoint path or ID (e.g., `/sql/1.0/warehouses/xxx` or just `xxx`)
 
 **Authentication Options:**
 - `--auth-type TEXT`: Authentication type: `oauth` (default), `pat`, or `sp`
@@ -387,38 +434,46 @@ lockstep plan PATH [OPTIONS]
 - `--ignore-permissions`: Exclude permission (GRANT/REVOKE) changes from the plan
 
 **Output Options:**
+- `--format, -f TEXT`: Output format: `table` (default), `json`, or `junit`
+- `--out, -o PATH`: Write output to file (in addition to displaying)
+- `--plan-out PATH`: Save the plan to a JSON file for later apply
 - `--verbose, -v`: Enable verbose output
 - `--quiet, -q`: Suppress non-error output
-- `--junit-xml PATH`: Output results in JUnit XML format (for CI/CD integration)
 
 **Exit Codes:**
 - `0`: No changes needed (in sync)
 - `1`: Error occurred
 - `2`: Changes detected (drift)
 
-**Plan Output:**
-- `--out, -o PATH`: Save the plan to a JSON file for later apply
-
 **Examples:**
 
 ```bash
-# Preview changes for a single contract
+# Use Databricks CLI profile (recommended)
+lockstep plan contracts/ --profile my-workspace --sql-endpoint abc123
+
+# Preview changes for a single contract (default table format)
 lockstep plan contracts/customer.yaml
 
 # Preview changes for all contracts
 lockstep plan contracts/
 
 # Save plan to file for later apply
-lockstep plan contracts/ --out plan.json
+lockstep plan contracts/ --plan-out plan.json
+
+# Output as JSON
+lockstep plan contracts/ --format json
+
+# Output as JUnit XML
+lockstep plan contracts/ --format junit
+
+# Output as JUnit XML and save to file
+lockstep plan contracts/ --format junit --out reports/drift.xml
 
 # Ignore tag changes in the plan
 lockstep plan contracts/ --ignore-tags
 
 # Only show column changes (ignore everything else)
 lockstep plan contracts/ --ignore-tags --ignore-descriptions --ignore-constraints
-
-# Output results as JUnit XML for CI/CD
-lockstep plan contracts/ --junit-xml reports/drift.xml
 ```
 
 ### `lockstep apply`
@@ -430,11 +485,12 @@ lockstep apply PATH [OPTIONS]
 ```
 
 **Arguments:**
-- `PATH`: Path to YAML contract file/directory OR a JSON plan file from `lockstep plan --out`
+- `PATH`: Path to YAML contract file/directory OR a JSON plan file from `lockstep plan --plan-out`
 
 **Connection Options:**
-- `--host TEXT`: Databricks workspace host URL
-- `--sql-endpoint TEXT`: SQL warehouse endpoint path (e.g., `/sql/1.0/warehouses/xxx`)
+- `--profile, -p TEXT`: Databricks CLI profile name from `~/.databrickscfg` (recommended)
+- `--host TEXT`: Databricks workspace host URL (not required if `--profile` is set)
+- `--sql-endpoint TEXT`: SQL warehouse endpoint path or ID (e.g., `/sql/1.0/warehouses/xxx` or just `xxx`)
 
 **Authentication Options:**
 - `--auth-type TEXT`: Authentication type: `oauth` (default), `pat`, or `sp`
@@ -461,18 +517,28 @@ lockstep apply PATH [OPTIONS]
 - `--table-prefix TEXT`: Prefix to add to table names
 
 **Output Options:**
+- `--format, -f TEXT`: Output format: `table` (default), `json`, or `junit`
+- `--out, -o PATH`: Write output to file (in addition to displaying)
 - `--verbose, -v`: Enable verbose output
 - `--quiet, -q`: Suppress non-error output
-- `--junit-xml PATH`: Output results in JUnit XML format (for CI/CD integration)
 
 **Examples:**
 
 ```bash
+# Use Databricks CLI profile (recommended)
+lockstep apply contracts/ --profile my-workspace --sql-endpoint abc123
+
 # Apply a single contract
 lockstep apply contracts/customer.yaml
 
-# Apply a saved plan (from 'lockstep plan --out')
+# Apply a saved plan (from 'lockstep plan --plan-out')
 lockstep apply plan.json
+
+# Output as JSON
+lockstep apply contracts/ --format json
+
+# Output as JUnit XML and save to file
+lockstep apply contracts/ --format junit --out results.xml
 
 # Apply with Service Principal (CI/CD)
 lockstep apply contracts/ \
@@ -515,9 +581,10 @@ lockstep validate PATH [OPTIONS]
 **Arguments:**
 - `PATH`: Path to YAML file or directory to validate
 
-**Options:**
+**Output Options:**
+- `--format, -f TEXT`: Output format: `table` (default), `json`, or `junit`
+- `--out, -o PATH`: Write output to file (in addition to displaying)
 - `--verbose, -v`: Show detailed validation output
-- `--junit-xml PATH`: Output results in JUnit XML format (for CI/CD integration)
 
 **Examples:**
 
@@ -528,8 +595,14 @@ lockstep validate contracts/customers.yaml
 # Validate all files in a directory
 lockstep validate contracts/
 
-# Validate and output JUnit XML report (for CI/CD)
-lockstep validate contracts/ --junit-xml reports/validation-report.xml
+# Output as JSON
+lockstep validate contracts/ --format json
+
+# Output as JUnit XML
+lockstep validate contracts/ --format junit
+
+# Output as JUnit XML and save to file
+lockstep validate contracts/ --format junit --out reports/validation.xml
 ```
 
 ## ODCS Contract Schema
@@ -831,22 +904,32 @@ lockstep plan contracts/ --ignore-permissions
 - The service principal or user running Lockstep must have `MANAGE` privilege on the table
 - Groups and users referenced in roles must exist in Unity Catalog
 
-## JUnit XML Reports
+## Output Formats
 
-All commands support JUnit XML output for CI/CD integration via the `--junit-xml` flag:
+All commands support multiple output formats via the `--format` flag:
+
+| Format | Description |
+|--------|-------------|
+| `table` | Rich terminal table (default) |
+| `json` | JSON format for programmatic processing |
+| `junit` | JUnit XML format for CI/CD integration |
+
+Use `--out` to write output to a file in addition to displaying:
 
 ```bash
-# Validation report
-lockstep validate contracts/ --junit-xml reports/validation.xml
+# Output validation as JSON
+lockstep validate contracts/ --format json
 
-# Drift detection report  
-lockstep plan contracts/ --junit-xml reports/drift.xml
+# Output drift detection as JUnit XML and save to file
+lockstep plan contracts/ --format junit --out reports/drift.xml
 
-# Apply results report
-lockstep apply contracts/ --junit-xml reports/apply.xml
+# Output apply results as JSON and save to file
+lockstep apply contracts/ --format json --out reports/apply.json
 ```
 
-The JUnit XML format is compatible with:
+## JUnit XML Reports
+
+The JUnit XML format (`--format junit`) is compatible with:
 - **GitHub Actions**: Use `EnricoMi/publish-unit-test-result-action`
 - **Azure DevOps**: Built-in test results publishing
 - **Jenkins**: JUnit plugin
@@ -869,7 +952,7 @@ Example report structure:
 Use `lockstep plan` to detect drift between contracts and Unity Catalog. This command:
 - Makes no changes to Unity Catalog
 - Exits with code 0 if in sync, code 2 if drift detected
-- Optionally outputs JUnit XML reports for CI/CD test reporting
+- Supports `--format junit` for CI/CD test reporting
 
 ```bash
 #!/bin/bash
@@ -886,7 +969,7 @@ lockstep plan contracts/ \
   --sql-endpoint "$DATABRICKS_HTTP_PATH" \
   --client-id "$DATABRICKS_CLIENT_ID" \
   --client-secret "$DATABRICKS_CLIENT_SECRET" \
-  --junit-xml reports/drift-report.xml
+  --format junit --out reports/drift-report.xml
 
 exit_code=$?
 
@@ -945,7 +1028,7 @@ jobs:
       - name: Validate contract syntax
         run: |
           mkdir -p reports
-          lockstep validate contracts/ --junit-xml reports/validation.xml
+          lockstep validate contracts/ --format junit --out reports/validation.xml
           
       - name: Upload validation report
         uses: actions/upload-artifact@v4
@@ -983,7 +1066,7 @@ jobs:
         run: |
           set +e
           mkdir -p reports
-          lockstep plan contracts/ --junit-xml reports/drift-check.xml
+          lockstep plan contracts/ --format junit --out reports/drift-check.xml
           exit_code=$?
           set -e
           

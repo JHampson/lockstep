@@ -140,16 +140,6 @@ jobs:
         with:
           sarif_file: "trivy-results.sarif"
 
-  dependency-review:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: high
-          deny-licenses: GPL-3.0, AGPL-3.0
-
+  # Note: dependency-review-action requires GitHub Advanced Security
+  # which is not available on private personal repositories.
+  # Using pip-audit in dependency-scan job instead for vulnerability scanning.

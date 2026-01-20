@@ -1,0 +1,30 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+[extend]
+# Use the default gitleaks config as a base
+useDefault = true
+
+# Allowlist rules for false positives
+[allowlist]
+description = "Allowlist for example/documentation tokens"
+
+# Ignore example tokens in documentation
+paths = [
+  '''README\.md''',
+  '''docs/.*\.md''',
+]
+
+# Ignore specific patterns that are clearly examples
+regexes = [
+  '''dapi_your_token_here''',
+  '''dapi_example_token''',
+  '''your[_-]token[_-]here''',
+  '''EXAMPLE[_-]TOKEN''',
+]
+
+# Ignore specific commits if needed (e.g., historical false positives)
+# commits = [
+#   "commit-sha-here",
+# ]
+
