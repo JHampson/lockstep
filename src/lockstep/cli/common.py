@@ -22,9 +22,6 @@ from lockstep.cli.helpers import (
     LoadContractsResult,
     # Pure functions
     build_databricks_config,
-    # Console instances
-    console,
-    error_console,
     find_yaml_files,
     get_version,
     load_contracts_from_path,
@@ -78,9 +75,6 @@ __all__ = [
     # Data classes
     "ConnectionOptions",
     "LoadContractsResult",
-    # Console instances
-    "console",
-    "error_console",
     # Logging
     "setup_logging",
     # Pure functions

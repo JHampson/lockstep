@@ -9,8 +9,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from rich.console import Console
-
 from lockstep import __version__
 from lockstep.cli.exceptions import (
     ContractLoadingError,
@@ -52,15 +50,6 @@ class LoadContractsResult:
     def has_validation_errors(self) -> bool:
         """Return True if there were validation errors."""
         return len(self.validation_errors) > 0
-
-
-# =============================================================================
-# Console instances (for CLI use only)
-# =============================================================================
-
-# These are exported for CLI commands that need direct console access
-console = Console()
-error_console = Console(stderr=True)
 
 
 # =============================================================================
