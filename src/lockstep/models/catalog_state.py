@@ -62,18 +62,16 @@ class CatalogGrant:
     """Represents a permission grant in Unity Catalog."""
 
     principal: str  # User email or group name
-    principal_type: str  # 'USER' or 'GROUP'
     privilege: str  # e.g., 'SELECT', 'MODIFY', 'ALL PRIVILEGES'
 
     def __hash__(self) -> int:
-        return hash((self.principal.lower(), self.principal_type.upper(), self.privilege.upper()))
+        return hash((self.principal.lower(), self.privilege.upper()))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, CatalogGrant):
             return False
         return (
             self.principal.lower() == other.principal.lower()
-            and self.principal_type.upper() == other.principal_type.upper()
             and self.privilege.upper() == other.privilege.upper()
         )
 

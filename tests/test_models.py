@@ -259,3 +259,196 @@ class TestContract:
         assert col.logical_type_options is not None
         assert col.logical_type_options["minimum"] == 0
         assert col.logical_type_options["maximum"] == 100
+
+
+class TestODCSRole:
+    """Tests for ODCSRole model and permission grants."""
+
+    def test_single_principal_string(self) -> None:
+        """Test single principal as string."""
+        from lockstep.models.contract import ODCSRole
+
+        role = ODCSRole(
+            role="data_engineers",
+            access="read_write",
+            customProperties=[
+                {"property": "principal", "value": "data_engineers"},
+                {"property": "privileges", "value": ["SELECT", "MODIFY"]},
+            ],
+        )
+
+        grants = role.get_permission_grants()
+        assert len(grants) == 1
+        assert grants[0].principal == "data_engineers"
+        assert grants[0].privileges == ["SELECT", "MODIFY"]
+
+    def test_multiple_principals_list(self) -> None:
+        """Test multiple principals as list."""
+        from lockstep.models.contract import ODCSRole
+
+        role = ODCSRole(
+            role="shared_access",
+            access="read_only",
+            customProperties=[
+                {
+                    "property": "principal",
+                    "value": ["data_engineers", "data_analysts", "data_scientists"],
+                },
+                {"property": "privileges", "value": ["SELECT"]},
+            ],
+        )
+
+        grants = role.get_permission_grants()
+        assert len(grants) == 3
+        assert grants[0].principal == "data_engineers"
+        assert grants[1].principal == "data_analysts"
+        assert grants[2].principal == "data_scientists"
+        for grant in grants:
+            assert grant.privileges == ["SELECT"]
+
+    def test_no_principal_returns_empty_list(self) -> None:
+        """Test that missing principal returns empty list."""
+        from lockstep.models.contract import ODCSRole
+
+        role = ODCSRole(
+            role="incomplete",
+            customProperties=[
+                {"property": "privileges", "value": ["SELECT"]},
+            ],
+        )
+
+        grants = role.get_permission_grants()
+        assert grants == []
+
+    def test_no_privileges_returns_empty_list(self) -> None:
+        """Test that missing privileges returns empty list."""
+        from lockstep.models.contract import ODCSRole
+
+        role = ODCSRole(
+            role="incomplete",
+            customProperties=[
+                {"property": "principal", "value": "data_engineers"},
+            ],
+        )
+
+        grants = role.get_permission_grants()
+        assert grants == []
+
+    def test_privileges_normalized_to_uppercase(self) -> None:
+        """Test that privileges are normalized to uppercase."""
+        from lockstep.models.contract import ODCSRole
+
+        role = ODCSRole(
+            role="test",
+            customProperties=[
+                {"property": "principal", "value": "test_group"},
+                {"property": "privileges", "value": ["select", "Modify"]},
+            ],
+        )
+
+        grants = role.get_permission_grants()
+        assert grants[0].privileges == ["SELECT", "MODIFY"]
+
+
+class TestContractPermissionGrants:
+    """Tests for Contract.permission_grants property."""
+
+    def test_permission_grants_from_multiple_roles(self) -> None:
+        """Test extracting permission grants from multiple roles."""
+        contract_data: dict[str, Any] = {
+            "kind": "DataContract",
+            "apiVersion": "v3.0.0",
+            "id": "test-contract",
+            "name": "Test Contract",
+            "servers": [
+                {
+                    "server": "production",
+                    "type": "databricks",
+                    "catalog": "main",
+                    "schema": "default",
+                    "host": "https://test.databricks.com",
+                }
+            ],
+            "schema": [
+                {
+                    "name": "test_table",
+                    "physicalType": "table",
+                    "properties": [
+                        {"name": "id", "logicalType": "string"},
+                    ],
+                }
+            ],
+            "roles": [
+                {
+                    "role": "engineers",
+                    "customProperties": [
+                        {"property": "principal", "value": "data_engineers"},
+                        {"property": "privileges", "value": ["SELECT", "MODIFY"]},
+                    ],
+                },
+                {
+                    "role": "analysts",
+                    "customProperties": [
+                        {"property": "principal", "value": "data_analysts"},
+                        {"property": "privileges", "value": ["SELECT"]},
+                    ],
+                },
+            ],
+        }
+
+        contract = Contract.model_validate(contract_data)
+        grants = contract.permission_grants
+
+        assert len(grants) == 2
+        principals = [g.principal for g in grants]
+        assert "data_engineers" in principals
+        assert "data_analysts" in principals
+
+    def test_permission_grants_with_list_principals(self) -> None:
+        """Test that list principals are expanded correctly."""
+        contract_data: dict[str, Any] = {
+            "kind": "DataContract",
+            "apiVersion": "v3.0.0",
+            "id": "test-contract",
+            "name": "Test Contract",
+            "servers": [
+                {
+                    "server": "production",
+                    "type": "databricks",
+                    "catalog": "main",
+                    "schema": "default",
+                    "host": "https://test.databricks.com",
+                }
+            ],
+            "schema": [
+                {
+                    "name": "test_table",
+                    "physicalType": "table",
+                    "properties": [
+                        {"name": "id", "logicalType": "string"},
+                    ],
+                }
+            ],
+            "roles": [
+                {
+                    "role": "shared_read",
+                    "customProperties": [
+                        {
+                            "property": "principal",
+                            "value": ["team_a", "team_b", "team_c"],
+                        },
+                        {"property": "privileges", "value": ["SELECT"]},
+                    ],
+                },
+            ],
+        }
+
+        contract = Contract.model_validate(contract_data)
+        grants = contract.permission_grants
+
+        assert len(grants) == 3
+        principals = [g.principal for g in grants]
+        assert principals == ["team_a", "team_b", "team_c"]
+        # All should have SELECT privilege
+        for grant in grants:
+            assert grant.privileges == ["SELECT"]

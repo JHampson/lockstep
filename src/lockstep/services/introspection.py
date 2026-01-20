@@ -328,24 +328,17 @@ class IntrospectionService:
                 if not principal or not action_type:
                     continue
 
-                # Parse principal type from principal string
+                # Parse principal name from SHOW GRANTS output
                 # Format is typically "user@domain.com" or "`group_name`"
-                # SHOW GRANTS returns principal in format: `group_name` or user@email.com
-                principal_type = "GROUP"
                 principal_name = principal
 
-                # Check if it looks like an email (user)
-                if "@" in principal:
-                    principal_type = "USER"
-                # Backtick-quoted names are typically groups
-                elif principal.startswith("`") and principal.endswith("`"):
+                # Remove backticks from group names
+                if principal.startswith("`") and principal.endswith("`"):
                     principal_name = principal[1:-1]
-                    principal_type = "GROUP"
 
                 grants.append(
                     CatalogGrant(
                         principal=principal_name,
-                        principal_type=principal_type,
                         privilege=action_type.upper(),
                     )
                 )

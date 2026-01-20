@@ -215,9 +215,9 @@ class ODCSRole(BaseModel):
     """ODCS v3 role definition for documenting IAM roles.
 
     This follows the official ODCS format. For actual GRANT/REVOKE operations,
-    define principal, principal_type, and privileges in customProperties.
+    define principal and privileges in customProperties.
 
-    Example YAML:
+    Example YAML (single principal):
         roles:
           - role: data_engineers
             access: read_write
@@ -225,10 +225,22 @@ class ODCSRole(BaseModel):
             customProperties:
               - property: principal
                 value: data_engineers
-              - property: principal_type
-                value: group
               - property: privileges
                 value: [SELECT, MODIFY]
+
+    Example YAML (multiple principals with same privileges):
+        roles:
+          - role: shared_access
+            access: read_only
+            description: Multiple teams with read access
+            customProperties:
+              - property: principal
+                value:
+                  - data_engineers
+                  - data_analysts
+                  - admin@company.com
+              - property: privileges
+                value: [SELECT]
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
@@ -242,34 +254,56 @@ class ODCSRole(BaseModel):
         description="Custom properties including permission details",
     )
 
-    def get_permission_grant(self) -> PermissionGrant | None:
-        """Extract PermissionGrant from customProperties if defined.
+    def get_permission_grants(self) -> list[PermissionGrant]:
+        """Extract PermissionGrant(s) from customProperties if defined.
+
+        Supports both single principal (string) and multiple principals (list).
+
+        Example with single principal:
+            customProperties:
+              - property: principal
+                value: data_engineers
+              - property: privileges
+                value: [SELECT, MODIFY]
+
+        Example with multiple principals:
+            customProperties:
+              - property: principal
+                value:
+                  - data_engineers
+                  - data_analysts
+              - property: privileges
+                value: [SELECT]
 
         Returns:
-            PermissionGrant if principal and privileges are defined, else None.
+            List of PermissionGrant objects, one per principal.
         """
-        principal = None
-        principal_type = "group"
+        principals: list[str] = []
         privileges: list[str] = []
 
         for prop in self.custom_properties:
             prop_name = prop.get("property", "")
             prop_value = prop.get("value")
 
-            if prop_name == "principal" and isinstance(prop_value, str):
-                principal = prop_value
-            elif prop_name == "principal_type" and isinstance(prop_value, str):
-                principal_type = prop_value
+            if prop_name == "principal":
+                if isinstance(prop_value, str):
+                    principals = [prop_value]
+                elif isinstance(prop_value, list):
+                    principals = [str(p) for p in prop_value]
             elif prop_name == "privileges" and isinstance(prop_value, list):
                 privileges = [str(p).upper() for p in prop_value]
 
-        if principal and privileges:
-            return PermissionGrant(
-                principal=principal,
-                principal_type=principal_type,
-                privileges=privileges,
-            )
-        return None
+        # Create a PermissionGrant for each principal
+        grants = []
+        if principals and privileges:
+            for principal in principals:
+                grants.append(
+                    PermissionGrant(
+                        principal=principal,
+                        privileges=privileges,
+                    )
+                )
+        return grants
 
 
 class PermissionGrant(BaseModel):
@@ -279,39 +313,19 @@ class PermissionGrant(BaseModel):
 
     Example in customProperties:
         customProperties:
-          - property: permissions
-            value:
-              - principal: data_engineers
-                type: group
-                privileges:
-                  - SELECT
-                  - MODIFY
+          - property: principal
+            value: data_engineers
+          - property: privileges
+            value: [SELECT, MODIFY]
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     principal: str = Field(..., description="User email or group name")
-    principal_type: str = Field(
-        default="group",
-        alias="type",
-        description="Type of principal: 'user' or 'group'",
-    )
     privileges: list[str] = Field(
         default_factory=list,
         description="List of privileges (SELECT, MODIFY, ALL PRIVILEGES, etc.)",
     )
-
-    @field_validator("principal_type", mode="before")
-    @classmethod
-    def normalize_principal_type(cls, v: str) -> str:
-        """Normalize principal type to lowercase."""
-        if isinstance(v, str):
-            v = v.lower()
-            if v in ("user", "users"):
-                return "user"
-            if v in ("group", "groups"):
-                return "group"
-        return v
 
     @field_validator("privileges", mode="before")
     @classmethod
@@ -545,7 +559,7 @@ class Contract(BaseModel):
     def permission_grants(self) -> list[PermissionGrant]:
         """Extract permission grants from roles' customProperties.
 
-        Each role can define principal, principal_type, and privileges
+        Each role can define principal (single or list) and privileges
         in its customProperties section.
 
         Returns:
@@ -553,9 +567,7 @@ class Contract(BaseModel):
         """
         grants = []
         for role in self.roles:
-            perm_grant = role.get_permission_grant()
-            if perm_grant is not None:
-                grants.append(perm_grant)
+            grants.extend(role.get_permission_grants())
         return grants
 
     def get_full_table_name(

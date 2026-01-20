@@ -472,12 +472,10 @@ class DiffService:
         # Build set of expected grants from contract permission_grants (from customProperties)
         expected_grants: set[CatalogGrant] = set()
         for perm_grant in contract.permission_grants:
-            principal_type = perm_grant.principal_type.upper()
             for privilege in perm_grant.privileges:
                 expected_grants.add(
                     CatalogGrant(
                         principal=perm_grant.principal,
-                        principal_type=principal_type,
                         privilege=privilege.upper(),
                     )
                 )
@@ -492,18 +490,16 @@ class DiffService:
             sql = self.sql_gen.grant_permission(
                 full_table_name=full_table_name,
                 principal=grant.principal,
-                principal_type=grant.principal_type,
                 privilege=grant.privilege,
             )
             plan.actions.append(
                 SyncAction(
                     action_type=ActionType.GRANT_PERMISSION,
                     target=full_table_name,
-                    description=f"Grant {grant.privilege} to {grant.principal_type.lower()} {grant.principal}",
+                    description=f"Grant {grant.privilege} to {grant.principal}",
                     sql=sql,
                     details={
                         "principal": grant.principal,
-                        "principal_type": grant.principal_type,
                         "privilege": grant.privilege,
                     },
                 )
@@ -514,18 +510,16 @@ class DiffService:
             sql = self.sql_gen.revoke_permission(
                 full_table_name=full_table_name,
                 principal=grant.principal,
-                principal_type=grant.principal_type,
                 privilege=grant.privilege,
             )
             plan.actions.append(
                 SyncAction(
                     action_type=ActionType.REVOKE_PERMISSION,
                     target=full_table_name,
-                    description=f"Revoke {grant.privilege} from {grant.principal_type.lower()} {grant.principal}",
+                    description=f"Revoke {grant.privilege} from {grant.principal}",
                     sql=sql,
                     details={
                         "principal": grant.principal,
-                        "principal_type": grant.principal_type,
                         "privilege": grant.privilege,
                     },
                 )
