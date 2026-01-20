@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 
 from typer.testing import CliRunner
 
-from lockstep.cli.helpers import get_databricks_config
+from lockstep.cli.helpers import ConnectionOptions, build_databricks_config
 from lockstep.cli.main import app
 from lockstep.databricks.config import AuthType
 from lockstep.models.catalog_state import ActionType, SyncAction, SyncPlan
@@ -423,58 +423,53 @@ class TestApplyCommand:
             assert options.add_columns is False
 
 
-class TestGetDatabricksConfig:
-    """Tests for get_databricks_config helper."""
+class TestBuildDatabricksConfig:
+    """Tests for build_databricks_config helper."""
 
     def test_default_auth_type_is_oauth(self) -> None:
         """Test that default auth type is OAuth."""
-        config = get_databricks_config(
+        conn = ConnectionOptions(
             host="https://test.databricks.com",
             http_path="/sql/test",
-            auth_type=None,
-            token=None,
-            client_id=None,
-            client_secret=None,
         )
+        config = build_databricks_config(conn)
         assert config.auth_type == AuthType.OAUTH
 
     def test_pat_auth_type(self) -> None:
         """Test PAT authentication type."""
-        config = get_databricks_config(
+        conn = ConnectionOptions(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type="pat",
             token="my-token",
-            client_id=None,
-            client_secret=None,
         )
+        config = build_databricks_config(conn)
         assert config.auth_type == AuthType.PAT
         assert config.token == "my-token"
 
     def test_sp_auth_type(self) -> None:
         """Test Service Principal authentication type."""
-        config = get_databricks_config(
+        conn = ConnectionOptions(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type="sp",
-            token=None,
             client_id="client-id",
             client_secret="client-secret",
         )
+        config = build_databricks_config(conn)
         assert config.auth_type == AuthType.SP
         assert config.client_id == "client-id"
         assert config.client_secret == "client-secret"
 
     def test_auth_type_case_insensitive(self) -> None:
         """Test that auth type is case insensitive."""
-        config = get_databricks_config(
+        conn = ConnectionOptions(
             host="https://test.databricks.com",
             http_path="/sql/test",
             auth_type="PAT",
             token="my-token",
-            client_id=None,
-            client_secret=None,
         )
+        config = build_databricks_config(conn)
         assert config.auth_type == AuthType.PAT
 
 

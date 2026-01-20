@@ -246,13 +246,15 @@ def execute_apply_saved_plan(
 
 
 def execute_validate(
-    path: Path,
+    files: list[Path],
+    base_path: Path,
     loader: ContractLoader,
 ) -> ValidateResult:
     """Execute a validate action to check contract YAML files.
 
     Args:
-        path: Path to file or directory to validate.
+        files: List of YAML files to validate.
+        base_path: Base path for computing relative paths.
         loader: ContractLoader instance for validation.
 
     Returns:
@@ -260,18 +262,11 @@ def execute_validate(
     """
     timestamp = datetime.now(UTC).isoformat()
 
-    # Collect files to validate
-    yaml_files: list[Path] = []
-    if path.is_file():
-        yaml_files = [path]
-    else:
-        yaml_files = list(path.glob("**/*.yaml")) + list(path.glob("**/*.yml"))
-
-    if not yaml_files:
+    if not files:
         return ValidateResult(
             success=True,
             timestamp=timestamp,
-            base_path=path,
+            base_path=base_path,
             results=[],
             total=0,
             valid_count=0,
@@ -283,9 +278,11 @@ def execute_validate(
     valid_count = 0
     invalid_count = 0
 
-    for yaml_file in sorted(yaml_files):
+    for yaml_file in files:
         is_valid, errors = loader.validate_file(yaml_file)
-        rel_path = str(yaml_file.relative_to(path) if path.is_dir() else yaml_file.name)
+        rel_path = str(
+            yaml_file.relative_to(base_path) if base_path.is_dir() else yaml_file.name
+        )
 
         results.append(
             FileValidationResult(
@@ -306,7 +303,7 @@ def execute_validate(
     return ValidateResult(
         success=invalid_count == 0,
         timestamp=timestamp,
-        base_path=path,
+        base_path=base_path,
         results=results,
         total=total,
         valid_count=valid_count,

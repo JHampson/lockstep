@@ -13,6 +13,7 @@ from lockstep.cli.common import (
     OutputArg,
     QuietArg,
     VerboseArg,
+    find_yaml_files,
     setup_logging,
     validate_output_format,
 )
@@ -85,14 +86,15 @@ def validate(
 
     present_info(f"\n[bold]Validating contracts in:[/bold] {path}\n", quiet=quiet)
 
-    # Execute the validate action
-    loader = ContractLoader()
-    result = execute_validate(path, loader)
+    # Find YAML files and execute validation
+    yaml_files = find_yaml_files(path)
 
-    # Handle empty results
-    if result.total == 0:
+    if not yaml_files:
         present_info("[yellow]No YAML files found.[/yellow]", quiet=quiet)
         raise typer.Exit(0)
+
+    loader = ContractLoader()
+    result = execute_validate(yaml_files, path, loader)
 
     # Present the results
     present_validate_result(result, output_options)

@@ -378,3 +378,44 @@ def present_info(message: str, quiet: bool = False) -> None:
     """
     if not quiet:
         console.print(message)
+
+
+def present_config_error(error: Exception) -> None:
+    """Present a configuration error with helpful guidance.
+
+    Args:
+        error: The MissingConfigurationError exception.
+    """
+    from lockstep.cli.exceptions import MissingConfigurationError
+
+    if isinstance(error, MissingConfigurationError):
+        auth_help = f"\n  • {error.missing}" if error.missing else ""
+        error_console.print(
+            "\n[red]❌ Databricks connection not configured.[/red]\n"
+            "Please provide connection details via:\n"
+            "  • CLI options: --profile OR --host, --sql-endpoint\n"
+            "  • Environment variables: DATABRICKS_HOST, DATABRICKS_HTTP_PATH\n"
+            f"  • Config file: ~/.lockstep.yaml{auth_help}\n"
+        )
+    else:
+        error_console.print(f"\n[red]❌ Configuration error:[/red] {error}")
+
+
+def present_contract_load_error(error: Exception) -> None:
+    """Present a contract loading error.
+
+    Args:
+        error: The ContractLoadingError exception.
+    """
+    from lockstep.cli.exceptions import ContractLoadingError
+    from lockstep.cli.formatters import format_validation_report
+
+    if isinstance(error, ContractLoadingError):
+        if error.validation_errors:
+            error_console.print(format_validation_report(error.validation_errors))
+        else:
+            error_console.print(f"\n[red]❌ {error}[/red]")
+            for err in error.errors:
+                error_console.print(f"   • {err}")
+    else:
+        error_console.print(f"\n[red]❌ Failed to load contracts:[/red] {error}")

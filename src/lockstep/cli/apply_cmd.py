@@ -14,9 +14,14 @@ from lockstep.cli.common import (
     CatalogOverrideArg,
     ClientIdArg,
     ClientSecretArg,
+    ConnectionOptions,
+    ContractLoadingError,
     FormatArg,
     HostArg,
     HttpPathArg,
+    InvalidAuthTypeError,
+    InvalidFormatError,
+    MissingConfigurationError,
     OutputArg,
     ProfileArg,
     QuietArg,
@@ -24,17 +29,19 @@ from lockstep.cli.common import (
     TablePrefixArg,
     TokenArg,
     VerboseArg,
-    ensure_databricks_config,
-    error_console,
-    load_contracts,
+    build_databricks_config,
+    load_contracts_from_path,
     path_argument,
     setup_logging,
+    validate_databricks_config,
     validate_output_format,
 )
 from lockstep.cli.output import (
     OutputOptions,
     present_apply_progress,
     present_apply_result,
+    present_config_error,
+    present_contract_load_error,
     present_error,
     present_info,
 )
@@ -49,25 +56,18 @@ apply_app = typer.Typer()
 
 def _apply_saved_plan(
     plan_path: Path,
-    host: str | None,
-    http_path: str | None,
-    auth_type: str | None,
-    token: str | None,
-    client_id: str | None,
-    client_secret: str | None,
-    verbose: bool,
-    quiet: bool,
-    output_format: str,
-    out: Path | None,
-    profile: str | None = None,
+    conn_options: ConnectionOptions,
+    output_options: OutputOptions,
 ) -> None:
-    """Apply a saved plan file to Unity Catalog."""
-    output_options = OutputOptions(
-        format=output_format,
-        out_path=out,
-        quiet=quiet,
-        verbose=verbose,
-    )
+    """Apply a saved plan file to Unity Catalog.
+
+    Args:
+        plan_path: Path to the saved plan JSON file.
+        conn_options: Connection options for Databricks.
+        output_options: Output formatting options.
+    """
+    quiet = output_options.quiet
+    verbose = output_options.verbose
 
     present_info(f"\n[bold]Loading plan from:[/bold] {plan_path}", quiet=quiet)
 
@@ -77,7 +77,7 @@ def _apply_saved_plan(
             plan_data = json.load(f)
         saved_plan = SavedPlan.from_dict(plan_data)
     except (json.JSONDecodeError, KeyError) as e:
-        error_console.print(f"[red]❌ Invalid plan file:[/red] {e}")
+        present_error(f"Invalid plan file: {e}")
         raise typer.Exit(1) from None
 
     present_info(f"[dim]Plan created: {saved_plan.created_at}[/dim]", quiet=quiet)
@@ -91,17 +91,30 @@ def _apply_saved_plan(
         present_info("\n[green]✓ Plan has no changes to apply.[/green]", quiet=quiet)
         return
 
-    # Build configuration
-    effective_host = host or saved_plan.host
-    if not effective_host and not profile:
-        error_console.print(
-            "[red]❌ No host specified. Use --host, --profile, or ensure the plan contains a host.[/red]"
-        )
+    # Build configuration - use host from plan if not provided
+    effective_conn = ConnectionOptions(
+        profile=conn_options.profile,
+        host=conn_options.host or saved_plan.host,
+        http_path=conn_options.http_path,
+        auth_type=conn_options.auth_type,
+        token=conn_options.token,
+        client_id=conn_options.client_id,
+        client_secret=conn_options.client_secret,
+    )
+
+    if not effective_conn.host and not effective_conn.profile:
+        present_error("No host specified. Use --host, --profile, or ensure the plan contains a host.")
         raise typer.Exit(1) from None
 
-    config = ensure_databricks_config(
-        effective_host, http_path, auth_type, token, client_id, client_secret, profile
-    )
+    try:
+        config = build_databricks_config(effective_conn)
+        validate_databricks_config(config)
+    except InvalidAuthTypeError as e:
+        present_error(str(e))
+        raise typer.Exit(1) from None
+    except MissingConfigurationError as e:
+        present_config_error(e)
+        raise typer.Exit(1) from None
 
     # Show progress during execution (for saved plans we show each action)
     try:
@@ -279,9 +292,25 @@ def apply_contracts(
         $ lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
     """
     setup_logging(verbose, quiet)
-    output_format = validate_output_format(format)
 
-    # Create output options
+    # Validate output format
+    try:
+        output_format = validate_output_format(format)
+    except InvalidFormatError as e:
+        present_error(str(e))
+        raise typer.Exit(1) from None
+
+    # Create grouped options
+    conn_options = ConnectionOptions(
+        profile=profile,
+        host=host,
+        http_path=http_path,
+        auth_type=auth_type,
+        token=token,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+
     output_options = OutputOptions(
         format=output_format,
         out_path=out,
@@ -291,30 +320,46 @@ def apply_contracts(
 
     # Check if path is a saved plan file (JSON)
     if path.suffix.lower() == ".json" and path.is_file():
-        _apply_saved_plan(
-            path,
-            host,
-            http_path,
-            auth_type,
-            token,
-            client_id,
-            client_secret,
-            verbose,
-            quiet,
-            output_format,
-            out,
-            profile,
-        )
+        _apply_saved_plan(plan_path=path, conn_options=conn_options, output_options=output_options)
         return
 
     # Load contracts
+    present_info(f"\n[bold]Loading contracts from:[/bold] {path}", quiet=quiet)
     loader = ContractLoader()
-    contracts = load_contracts(path, loader, quiet=quiet)
+
+    try:
+        result = load_contracts_from_path(path, loader)
+    except ContractLoadingError as e:
+        present_contract_load_error(e)
+        raise typer.Exit(1) from None
+
+    if result.has_validation_errors:
+        present_contract_load_error(
+            ContractLoadingError("Some contracts failed validation", validation_errors=result.validation_errors)
+        )
+        if not result.contracts:
+            raise typer.Exit(1)
+        present_info(
+            f"\n[yellow]⚠️  Continuing with {len(result.contracts)} valid contract(s)[/yellow]",
+            quiet=quiet,
+        )
+
+    if not result.contracts:
+        present_info("[yellow]No contracts found.[/yellow]", quiet=quiet)
+        raise typer.Exit(0)
+
+    present_info(f"[green]✓[/green] Loaded {len(result.contracts)} contract(s)\n", quiet=quiet)
 
     # Build configuration
-    config = ensure_databricks_config(
-        host, http_path, auth_type, token, client_id, client_secret, profile
-    )
+    try:
+        config = build_databricks_config(conn_options)
+        validate_databricks_config(config)
+    except InvalidAuthTypeError as e:
+        present_error(str(e))
+        raise typer.Exit(1) from None
+    except MissingConfigurationError as e:
+        present_config_error(e)
+        raise typer.Exit(1) from None
 
     # Build sync options
     sync_options = SyncOptions(
@@ -334,16 +379,16 @@ def apply_contracts(
     )
 
     # Execute the apply action
-    result = execute_apply(contracts, config, sync_options)
+    apply_result = execute_apply(result.contracts, config, sync_options)
 
     # Handle errors
-    if result.error:
-        present_error(f"Connection error: {result.error}")
+    if apply_result.error:
+        present_error(f"Connection error: {apply_result.error}")
         raise typer.Exit(1)
 
     # Present the results
-    present_apply_result(result, output_options)
+    present_apply_result(apply_result, output_options)
 
     # Exit with error if any sync failed
-    if not result.success:
+    if not apply_result.success:
         raise typer.Exit(1)

@@ -1,22 +1,39 @@
 """Common CLI utilities - re-exports from options and helpers modules.
 
 This module provides backwards compatibility by re-exporting all symbols
-from the more focused options.py and helpers.py modules.
+from the more focused options.py, helpers.py, exceptions.py, and logging_config.py modules.
 """
 
 from __future__ import annotations
 
+# Re-export exceptions
+from lockstep.cli.exceptions import (
+    ConfigurationError,
+    ContractLoadingError,
+    InvalidAuthTypeError,
+    InvalidFormatError,
+    MissingConfigurationError,
+)
+
 # Re-export helpers
 from lockstep.cli.helpers import (
+    # Data classes
+    ConnectionOptions,
+    LoadContractsResult,
+    # Pure functions
+    build_databricks_config,
+    # Console instances
     console,
-    ensure_databricks_config,
     error_console,
-    get_databricks_config,
-    load_contracts,
-    setup_logging,
+    find_yaml_files,
+    get_version,
+    load_contracts_from_path,
+    validate_databricks_config,
     validate_output_format,
-    version_callback,
 )
+
+# Re-export logging
+from lockstep.cli.logging_config import setup_logging
 
 # Re-export options
 from lockstep.cli.options import (
@@ -52,6 +69,27 @@ from lockstep.cli.options import (
 )
 
 __all__ = [
+    # Exceptions
+    "ConfigurationError",
+    "InvalidAuthTypeError",
+    "MissingConfigurationError",
+    "InvalidFormatError",
+    "ContractLoadingError",
+    # Data classes
+    "ConnectionOptions",
+    "LoadContractsResult",
+    # Console instances
+    "console",
+    "error_console",
+    # Logging
+    "setup_logging",
+    # Pure functions
+    "get_version",
+    "validate_output_format",
+    "build_databricks_config",
+    "validate_databricks_config",
+    "find_yaml_files",
+    "load_contracts_from_path",
     # Options
     "path_argument",
     "profile_option",
@@ -83,13 +121,4 @@ __all__ = [
     "QuietArg",
     "FormatArg",
     "OutputArg",
-    # Helpers
-    "console",
-    "error_console",
-    "setup_logging",
-    "version_callback",
-    "validate_output_format",
-    "get_databricks_config",
-    "ensure_databricks_config",
-    "load_contracts",
 ]

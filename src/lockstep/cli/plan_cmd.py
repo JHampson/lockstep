@@ -15,9 +15,14 @@ from lockstep.cli.common import (
     CatalogOverrideArg,
     ClientIdArg,
     ClientSecretArg,
+    ConnectionOptions,
+    ContractLoadingError,
     FormatArg,
     HostArg,
     HttpPathArg,
+    InvalidAuthTypeError,
+    InvalidFormatError,
+    MissingConfigurationError,
     OutputArg,
     ProfileArg,
     QuietArg,
@@ -25,14 +30,17 @@ from lockstep.cli.common import (
     TablePrefixArg,
     TokenArg,
     VerboseArg,
-    ensure_databricks_config,
-    load_contracts,
+    build_databricks_config,
+    load_contracts_from_path,
     path_argument,
     setup_logging,
+    validate_databricks_config,
     validate_output_format,
 )
 from lockstep.cli.output import (
     OutputOptions,
+    present_config_error,
+    present_contract_load_error,
     present_error,
     present_info,
     present_plan_result,
@@ -154,9 +162,25 @@ def plan_changes(
         $ lockstep plan contracts/ --quiet
     """
     setup_logging(verbose, quiet)
-    output_format = validate_output_format(format)
 
-    # Create output options
+    # Validate output format
+    try:
+        output_format = validate_output_format(format)
+    except InvalidFormatError as e:
+        present_error(str(e))
+        raise typer.Exit(1) from None
+
+    # Create grouped options
+    conn_options = ConnectionOptions(
+        profile=profile,
+        host=host,
+        http_path=http_path,
+        auth_type=auth_type,
+        token=token,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
+
     output_options = OutputOptions(
         format=output_format,
         out_path=out,
@@ -165,13 +189,42 @@ def plan_changes(
     )
 
     # Load contracts
+    present_info(f"\n[bold]Loading contracts from:[/bold] {path}", quiet=quiet)
     loader = ContractLoader()
-    contracts = load_contracts(path, loader, quiet=quiet)
+
+    try:
+        result = load_contracts_from_path(path, loader)
+    except ContractLoadingError as e:
+        present_contract_load_error(e)
+        raise typer.Exit(1) from None
+
+    if result.has_validation_errors:
+        present_contract_load_error(
+            ContractLoadingError("Some contracts failed validation", validation_errors=result.validation_errors)
+        )
+        if not result.contracts:
+            raise typer.Exit(1)
+        present_info(
+            f"\n[yellow]⚠️  Continuing with {len(result.contracts)} valid contract(s)[/yellow]",
+            quiet=quiet,
+        )
+
+    if not result.contracts:
+        present_info("[yellow]No contracts found.[/yellow]", quiet=quiet)
+        raise typer.Exit(0)
+
+    present_info(f"[green]✓[/green] Loaded {len(result.contracts)} contract(s)\n", quiet=quiet)
 
     # Build configuration
-    config = ensure_databricks_config(
-        host, http_path, auth_type, token, client_id, client_secret, profile
-    )
+    try:
+        config = build_databricks_config(conn_options)
+        validate_databricks_config(config)
+    except InvalidAuthTypeError as e:
+        present_error(str(e))
+        raise typer.Exit(1) from None
+    except MissingConfigurationError as e:
+        present_config_error(e)
+        raise typer.Exit(1) from None
 
     # Build sync options
     sync_options = SyncOptions(
@@ -191,23 +244,23 @@ def plan_changes(
     )
 
     # Execute the plan action
-    result = execute_plan(contracts, config, sync_options)
+    plan_result = execute_plan(result.contracts, config, sync_options)
 
     # Handle errors
-    if not result.success:
-        present_error(f"Connection error: {result.error}")
+    if not plan_result.success:
+        present_error(f"Connection error: {plan_result.error}")
         raise typer.Exit(1)
 
     # Present the results
-    present_plan_result(result, output_options)
+    present_plan_result(plan_result, output_options)
 
     # Save plan to file if requested
-    if plan_out and result.plans_to_save:
+    if plan_out and plan_result.plans_to_save:
         saved_plan = SavedPlan(
             version="1.0",
             created_at=datetime.now(UTC).isoformat(),
             host=config.host,
-            plans=result.plans_to_save,
+            plans=plan_result.plans_to_save,
         )
         with open(plan_out, "w") as f:
             json.dump(saved_plan.to_dict(), f, indent=2)
@@ -215,7 +268,7 @@ def plan_changes(
         present_info(f"[dim]Apply this plan with: lockstep apply {plan_out}[/dim]", quiet=quiet)
 
     # Present summary and exit with appropriate code
-    present_plan_summary(result, quiet=quiet)
+    present_plan_summary(plan_result, quiet=quiet)
 
-    if result.has_changes:
+    if plan_result.has_changes:
         raise typer.Exit(2)
