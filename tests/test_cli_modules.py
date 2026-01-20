@@ -29,6 +29,7 @@ from lockstep.cli.helpers import (
     validate_output_format,
 )
 from lockstep.cli.output import (
+    OutputFormat,
     OutputOptions,
     present_apply_progress,
     present_config_error,
@@ -154,25 +155,25 @@ class TestValidateOutputFormat:
 
     def test_valid_table_format(self) -> None:
         """Test 'table' is valid."""
-        assert validate_output_format("table") == "table"
+        assert validate_output_format("table") == OutputFormat.TABLE
 
     def test_valid_json_format(self) -> None:
         """Test 'json' is valid."""
-        assert validate_output_format("json") == "json"
+        assert validate_output_format("json") == OutputFormat.JSON
 
     def test_valid_junit_format(self) -> None:
         """Test 'junit' is valid."""
-        assert validate_output_format("junit") == "junit"
+        assert validate_output_format("junit") == OutputFormat.JUNIT
 
     def test_default_is_table(self) -> None:
         """Test None defaults to table."""
-        assert validate_output_format(None) == "table"
+        assert validate_output_format(None) == OutputFormat.TABLE
 
     def test_case_insensitive(self) -> None:
         """Test format is case insensitive."""
-        assert validate_output_format("JSON") == "json"
-        assert validate_output_format("TABLE") == "table"
-        assert validate_output_format("JUnit") == "junit"
+        assert validate_output_format("JSON") == OutputFormat.JSON
+        assert validate_output_format("TABLE") == OutputFormat.TABLE
+        assert validate_output_format("JUnit") == OutputFormat.JUNIT
 
     def test_invalid_format_raises(self) -> None:
         """Test invalid format raises InvalidFormatError."""
@@ -422,7 +423,7 @@ class TestOutputOptions:
     def test_defaults(self) -> None:
         """Test default values."""
         opts = OutputOptions()
-        assert opts.format == "table"
+        assert opts.format == OutputFormat.TABLE
         assert opts.out_path is None
         assert opts.quiet is False
         assert opts.verbose is False
@@ -430,12 +431,12 @@ class TestOutputOptions:
     def test_with_values(self) -> None:
         """Test setting values."""
         opts = OutputOptions(
-            format="json",
+            format=OutputFormat.JSON,
             out_path=Path("/test/out.json"),
             quiet=True,
             verbose=True,
         )
-        assert opts.format == "json"
+        assert opts.format == OutputFormat.JSON
         assert opts.out_path == Path("/test/out.json")
 
 

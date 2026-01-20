@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from lockstep import __version__
 from lockstep.cli.exceptions import (
@@ -20,6 +21,9 @@ from lockstep.databricks import DatabricksConfig
 from lockstep.databricks.config import AuthType
 from lockstep.models.contract import Contract
 from lockstep.services import ContractLoader, ContractLoadError
+
+if TYPE_CHECKING:
+    from lockstep.cli.output import OutputFormat
 
 # =============================================================================
 # Data Classes
@@ -62,22 +66,26 @@ def get_version() -> str:
     return __version__
 
 
-def validate_output_format(format_str: str | None) -> str:
+def validate_output_format(format_str: str | None) -> OutputFormat:
     """Validate and normalize the output format option.
 
     Args:
         format_str: The format string to validate.
 
     Returns:
-        Normalized format string (table, json, or junit).
+        OutputFormat enum value.
 
     Raises:
         InvalidFormatError: If format is not valid.
     """
-    output_format = (format_str or "table").lower()
-    if output_format not in ("table", "json", "junit"):
-        raise InvalidFormatError(format_str or "")
-    return output_format
+    # Import here to avoid circular import
+    from lockstep.cli.output import OutputFormat
+
+    normalized = (format_str or "table").lower()
+    try:
+        return OutputFormat(normalized)
+    except ValueError:
+        raise InvalidFormatError(format_str or "") from None
 
 
 def build_databricks_config(conn: ConnectionOptions) -> DatabricksConfig:

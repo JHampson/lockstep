@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from rich.console import Console
@@ -23,11 +24,19 @@ console = Console()
 error_console = Console(stderr=True)
 
 
+class OutputFormat(Enum):
+    """Output format options for CLI commands."""
+
+    TABLE = "table"
+    JSON = "json"
+    JUNIT = "junit"
+
+
 @dataclass
 class OutputOptions:
     """Options controlling output verbosity and format."""
 
-    format: str = "table"
+    format: OutputFormat = OutputFormat.TABLE
     out_path: Path | None = None
     quiet: bool = False
     verbose: bool = False
@@ -46,7 +55,7 @@ def present_plan_result(
     output_format = options.format
     out_path = options.out_path
 
-    if output_format == "junit":
+    if output_format == OutputFormat.JUNIT:
         output_content = generate_junit_xml(
             results=result.results,
             check_mode=True,
@@ -58,7 +67,7 @@ def present_plan_result(
             if not options.quiet:
                 console.print(f"\n[green]✓[/green] JUnit XML written to: {out_path}")
 
-    elif output_format == "json":
+    elif output_format == OutputFormat.JSON:
         output_data: dict[str, object] = {
             "command": "plan",
             "timestamp": result.timestamp,
@@ -136,7 +145,7 @@ def present_apply_result(
     output_format = options.format
     out_path = options.out_path
 
-    if output_format == "junit":
+    if output_format == OutputFormat.JUNIT:
         output_content = generate_junit_xml(
             results=result.results,
             check_mode=False,
@@ -148,7 +157,7 @@ def present_apply_result(
             if not options.quiet:
                 console.print(f"\n[green]✓[/green] JUnit XML written to: {out_path}")
 
-    elif output_format == "json":
+    elif output_format == OutputFormat.JSON:
         output_data: dict[str, object] = {
             "command": "apply",
             "timestamp": result.timestamp,
@@ -247,7 +256,7 @@ def present_validate_result(
     valid_files = [r.file_path for r in result.results if r.valid]
     invalid_files = [(r.file_path, r.errors) for r in result.results if not r.valid]
 
-    if output_format == "junit":
+    if output_format == OutputFormat.JUNIT:
         output_content = generate_validation_junit_xml(
             valid_files=valid_files,
             invalid_files=invalid_files,
@@ -259,7 +268,7 @@ def present_validate_result(
             if not options.quiet:
                 console.print(f"\n[green]✓[/green] JUnit XML written to: {out_path}")
 
-    elif output_format == "json":
+    elif output_format == OutputFormat.JSON:
         output_data = {
             "command": "validate",
             "timestamp": result.timestamp,

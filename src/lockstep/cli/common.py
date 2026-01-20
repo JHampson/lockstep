@@ -65,6 +65,9 @@ from lockstep.cli.options import (
     verbose_option,
 )
 
+# Re-export output types
+from lockstep.cli.output import OutputFormat
+
 __all__ = [
     # Exceptions
     "ConfigurationError",
@@ -72,6 +75,8 @@ __all__ = [
     "MissingConfigurationError",
     "InvalidFormatError",
     "ContractLoadingError",
+    # Output types
+    "OutputFormat",
     # Data classes
     "ConnectionOptions",
     "LoadContractsResult",
