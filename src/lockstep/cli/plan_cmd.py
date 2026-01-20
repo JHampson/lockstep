@@ -9,6 +9,7 @@ from typing import Annotated
 
 import typer
 
+from lockstep.cli.actions import execute_plan
 from lockstep.cli.common import (
     AuthTypeArg,
     CatalogOverrideArg,
@@ -26,18 +27,14 @@ from lockstep.cli.common import (
     VerboseArg,
     console,
     ensure_databricks_config,
-    error_console,
     load_contracts,
     path_argument,
     setup_logging,
     validate_output_format,
 )
-from lockstep.cli.formatters import format_plan
-from lockstep.cli.junit_reporter import generate_junit_xml
-from lockstep.databricks import DatabricksConnector
-from lockstep.databricks.connector import DatabricksConnectionError
+from lockstep.cli.output import present_error, present_plan_result, present_plan_summary
 from lockstep.models.catalog_state import SavedPlan
-from lockstep.services import ContractLoader, SyncService
+from lockstep.services import ContractLoader
 from lockstep.services.sync import SyncOptions
 
 # Create the plan command app
@@ -149,19 +146,21 @@ def plan_changes(
     setup_logging(verbose, quiet)
     output_format = validate_output_format(format)
 
+    # Load contracts
     loader = ContractLoader()
     contracts = load_contracts(path, loader)
 
+    # Build configuration
     config = ensure_databricks_config(
         host, http_path, auth_type, token, client_id, client_secret, profile
     )
 
+    # Build sync options
     sync_options = SyncOptions(
         dry_run=True,
         catalog_override=catalog_override,
         schema_override=schema_override,
         table_prefix=table_prefix,
-        # Show changes based on ignore flags
         add_tags=not ignore_tags,
         add_columns=not ignore_columns,
         add_descriptions=not ignore_descriptions,
@@ -170,104 +169,35 @@ def plan_changes(
         remove_columns=not ignore_columns,
         remove_tags=not ignore_tags,
         remove_constraints=not ignore_constraints,
-        remove_permissions=not ignore_permissions,  # Show revokes in plan too
+        remove_permissions=not ignore_permissions,
     )
 
-    try:
-        with DatabricksConnector(config) as connector:
-            sync_service = SyncService(connector)
-            results = sync_service.sync_contracts(contracts, sync_options)
+    # Execute the plan action
+    result = execute_plan(contracts, config, sync_options)
 
-            has_changes = False
-            plans_to_save = []
+    # Handle errors
+    if not result.success:
+        present_error(f"Connection error: {result.error}")
+        raise typer.Exit(1)
 
-            # Generate output based on format
-            if output_format == "junit":
-                output_content = generate_junit_xml(
-                    results=results,
-                    check_mode=True,
-                    output_path=None,  # Return string instead of writing
-                )
-                console.print(output_content)
-                if out:
-                    out.write_text(output_content)
-                    console.print(f"\n[green]✓[/green] JUnit XML written to: {out}")
+    # Present the results
+    present_plan_result(result, output_format, out)
 
-            elif output_format == "json":
-                output_data = {
-                    "command": "plan",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "results": [
-                        {
-                            "contract_name": r.contract_name,
-                            "table_name": r.table_name,
-                            "has_changes": r.plan.has_changes if r.plan else False,
-                            "actions": [
-                                {
-                                    "type": a.action_type.value,
-                                    "target": a.target,
-                                    "details": a.details,
-                                    "sql": a.sql,
-                                }
-                                for a in (r.plan.actions if r.plan else [])
-                            ],
-                        }
-                        for r in results
-                    ],
-                }
-                output_content = json.dumps(output_data, indent=2)
-                console.print(output_content)
-                if out:
-                    out.write_text(output_content)
-                    console.print(f"\n[green]✓[/green] JSON written to: {out}")
+    # Save plan to file if requested
+    if plan_out and result.plans_to_save:
+        saved_plan = SavedPlan(
+            version="1.0",
+            created_at=datetime.now(UTC).isoformat(),
+            host=config.host,
+            plans=result.plans_to_save,
+        )
+        with open(plan_out, "w") as f:
+            json.dump(saved_plan.to_dict(), f, indent=2)
+        console.print(f"\n[green]✓[/green] Plan saved to: {plan_out}")
+        console.print(f"[dim]Apply this plan with: lockstep apply {plan_out}[/dim]")
 
-            else:  # table format (default)
-                output_lines = []
-                for result in results:
-                    if result.plan and result.plan.has_changes:
-                        formatted = format_plan(result.plan)
-                        console.print(formatted)
-                        output_lines.append(str(formatted))
-                        has_changes = True
-                        plans_to_save.append(result.plan)
-                    else:
-                        msg = f"[dim]No changes needed for {result.table_name}[/dim]"
-                        console.print(msg)
-                        output_lines.append(f"No changes needed for {result.table_name}")
+    # Present summary and exit with appropriate code
+    present_plan_summary(result)
 
-                if out:
-                    out.write_text("\n".join(output_lines))
-                    console.print(f"\n[green]✓[/green] Output written to: {out}")
-
-            # Check for changes in all formats
-            for result in results:
-                if result.plan and result.plan.has_changes:
-                    has_changes = True
-                    if result.plan not in plans_to_save:
-                        plans_to_save.append(result.plan)
-
-            # Save plan to file if requested
-            if plan_out and plans_to_save:
-                saved_plan = SavedPlan(
-                    version="1.0",
-                    created_at=datetime.now(UTC).isoformat(),
-                    host=config.host,
-                    plans=plans_to_save,
-                )
-                with open(plan_out, "w") as f:
-                    json.dump(saved_plan.to_dict(), f, indent=2)
-                console.print(f"\n[green]✓[/green] Plan saved to: {plan_out}")
-                console.print(f"[dim]Apply this plan with: lockstep apply {plan_out}[/dim]")
-
-            if has_changes:
-                console.print(
-                    "\n[yellow]⚠️  Changes detected. Run 'lockstep apply' to apply changes.[/yellow]"
-                )
-                raise typer.Exit(2)
-            else:
-                console.print("\n[green]✓ All contracts are in sync with Unity Catalog.[/green]")
-
-    except DatabricksConnectionError as e:
-        error_console.print(f"\n[red]❌ Connection error:[/red] {e}")
-        raise typer.Exit(1) from None
-
+    if result.has_changes:
+        raise typer.Exit(2)

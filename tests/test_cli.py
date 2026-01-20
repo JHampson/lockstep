@@ -82,8 +82,8 @@ class TestPlanCommand:
     def test_plan_no_changes(self, tmp_contract_file: Path) -> None:
         """Test plan when no changes needed."""
         with (
-            patch("lockstep.cli.plan_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.plan_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -127,8 +127,8 @@ class TestPlanCommand:
     def test_plan_with_changes(self, tmp_contract_file: Path) -> None:
         """Test plan when changes are detected."""
         with (
-            patch("lockstep.cli.plan_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.plan_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -221,8 +221,8 @@ class TestApplyCommand:
     def test_apply_success(self, tmp_contract_file: Path) -> None:
         """Test successful apply."""
         with (
-            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -261,8 +261,8 @@ class TestApplyCommand:
     def test_apply_with_overrides(self, tmp_contract_file: Path) -> None:
         """Test apply with catalog/schema overrides."""
         with (
-            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -308,8 +308,8 @@ class TestApplyCommand:
     def test_apply_remove_columns(self, tmp_contract_file: Path) -> None:
         """Test --remove-columns flag."""
         with (
-            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -347,8 +347,8 @@ class TestApplyCommand:
     def test_apply_remove_tags(self, tmp_contract_file: Path) -> None:
         """Test --remove-tags flag."""
         with (
-            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)
@@ -386,8 +386,8 @@ class TestApplyCommand:
     def test_apply_no_add_columns(self, tmp_contract_file: Path) -> None:
         """Test --no-add-columns flag."""
         with (
-            patch("lockstep.cli.apply_cmd.DatabricksConnector") as mock_connector_cls,
-            patch("lockstep.cli.apply_cmd.SyncService") as mock_sync_cls,
+            patch("lockstep.cli.actions.DatabricksConnector") as mock_connector_cls,
+            patch("lockstep.cli.actions.SyncService") as mock_sync_cls,
         ):
             mock_connector = MagicMock()
             mock_connector.__enter__ = MagicMock(return_value=mock_connector)

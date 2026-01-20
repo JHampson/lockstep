@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
-from rich.panel import Panel
-from rich.table import Table
 
+from lockstep.cli.actions import execute_validate
 from lockstep.cli.common import (
     FormatArg,
     OutputArg,
@@ -19,7 +16,7 @@ from lockstep.cli.common import (
     setup_logging,
     validate_output_format,
 )
-from lockstep.cli.junit_reporter import generate_validation_junit_xml
+from lockstep.cli.output import present_validate_result, present_validate_summary
 from lockstep.services import ContractLoader
 
 # Create the validate command app
@@ -67,129 +64,23 @@ def validate(
     setup_logging(verbose, quiet=False)
     output_format = validate_output_format(format)
 
-    loader = ContractLoader()
     console.print(f"\n[bold]Validating contracts in:[/bold] {path}\n")
 
-    # Collect files to validate
-    yaml_files: list[Path] = []
-    if path.is_file():
-        yaml_files = [path]
-    else:
-        yaml_files = list(path.glob("**/*.yaml")) + list(path.glob("**/*.yml"))
+    # Execute the validate action
+    loader = ContractLoader()
+    result = execute_validate(path, loader)
 
-    if not yaml_files:
+    # Handle empty results
+    if result.total == 0:
         console.print("[yellow]No YAML files found.[/yellow]")
         raise typer.Exit(0)
 
-    # Validate each file
-    valid_count = 0
-    invalid_count = 0
-    valid_files: list[Path] = []
-    invalid_files: list[tuple[Path, list[str]]] = []
+    # Present the results
+    present_validate_result(result, output_format, out)
 
-    for yaml_file in sorted(yaml_files):
-        is_valid, errors = loader.validate_file(yaml_file)
+    # Present summary
+    present_validate_summary(result)
 
-        if is_valid:
-            valid_count += 1
-            valid_files.append(yaml_file)
-        else:
-            invalid_count += 1
-            invalid_files.append((yaml_file, errors))
-
-    total = valid_count + invalid_count
-
-    # Generate output based on format
-    if output_format == "junit":
-        output_content = generate_validation_junit_xml(
-            valid_files=valid_files,
-            invalid_files=invalid_files,
-            output_path=None,  # Return string instead of writing
-        )
-        console.print(output_content)
-        if out:
-            out.write_text(output_content)
-            console.print(f"\n[green]✓[/green] JUnit XML written to: {out}")
-
-    elif output_format == "json":
-        output_data = {
-            "command": "validate",
-            "timestamp": datetime.now(UTC).isoformat(),
-            "summary": {
-                "total": total,
-                "valid": valid_count,
-                "invalid": invalid_count,
-            },
-            "results": [
-                {
-                    "file": str(f.relative_to(path) if path.is_dir() else f.name),
-                    "valid": True,
-                    "errors": [],
-                }
-                for f in valid_files
-            ] + [
-                {
-                    "file": str(f.relative_to(path) if path.is_dir() else f.name),
-                    "valid": False,
-                    "errors": errors,
-                }
-                for f, errors in invalid_files
-            ],
-        }
-        output_content = json.dumps(output_data, indent=2)
-        console.print(output_content)
-        if out:
-            out.write_text(output_content)
-            console.print(f"\n[green]✓[/green] JSON written to: {out}")
-
-    else:  # table format (default)
-        results_table = Table(title="Validation Results")
-        results_table.add_column("File", style="cyan")
-        results_table.add_column("Status")
-        results_table.add_column("Details")
-
-        for yaml_file in valid_files:
-            rel_path = yaml_file.relative_to(path) if path.is_dir() else yaml_file.name
-            results_table.add_row(str(rel_path), "[green]✓ Valid[/green]", "")
-
-        for yaml_file, errors in invalid_files:
-            rel_path = yaml_file.relative_to(path) if path.is_dir() else yaml_file.name
-            error_details = "\n".join(errors[:3])  # Show first 3 errors
-            if len(errors) > 3:
-                error_details += f"\n... and {len(errors) - 3} more"
-            results_table.add_row(str(rel_path), "[red]✗ Invalid[/red]", error_details)
-
-        console.print(results_table)
-        console.print()
-
-        if out:
-            # Write plain text version to file
-            lines = ["Validation Results", "=" * 40]
-            for yaml_file in valid_files:
-                rel_path = yaml_file.relative_to(path) if path.is_dir() else yaml_file.name
-                lines.append(f"✓ {rel_path}: Valid")
-            for yaml_file, errors in invalid_files:
-                rel_path = yaml_file.relative_to(path) if path.is_dir() else yaml_file.name
-                lines.append(f"✗ {rel_path}: Invalid")
-                for err in errors[:3]:
-                    lines.append(f"  - {err}")
-            out.write_text("\n".join(lines))
-            console.print(f"[green]✓[/green] Output written to: {out}\n")
-
-    # Summary
-    if invalid_count == 0:
-        console.print(
-            Panel(
-                f"[green]All {total} contract(s) are valid! ✓[/green]",
-                border_style="green",
-            )
-        )
-    else:
-        console.print(
-            Panel(
-                f"[red]{invalid_count} of {total} contract(s) failed validation[/red]",
-                border_style="red",
-            )
-        )
+    # Exit with error if any validation failed
+    if not result.success:
         raise typer.Exit(1)
-

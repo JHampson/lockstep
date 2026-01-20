@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from lockstep.cli.actions import execute_apply, execute_apply_saved_plan
 from lockstep.cli.common import (
     AuthTypeArg,
     CatalogOverrideArg,
@@ -32,13 +32,11 @@ from lockstep.cli.common import (
     setup_logging,
     validate_output_format,
 )
-from lockstep.cli.formatters import format_sync_results
-from lockstep.cli.junit_reporter import generate_junit_xml
+from lockstep.cli.output import present_apply_progress, present_apply_result, present_error
 from lockstep.databricks import DatabricksConnector
-from lockstep.databricks.connector import DatabricksConnectionError
 from lockstep.models.catalog_state import SavedPlan
-from lockstep.services import ContractLoader, SyncService
-from lockstep.services.sync import SyncOptions, SyncResult
+from lockstep.services import ContractLoader
+from lockstep.services.sync import SyncOptions
 
 # Create the apply command app
 apply_app = typer.Typer()
@@ -61,6 +59,7 @@ def _apply_saved_plan(
     """Apply a saved plan file to Unity Catalog."""
     console.print(f"\n[bold]Loading plan from:[/bold] {plan_path}")
 
+    # Load the plan file
     try:
         with open(plan_path) as f:
             plan_data = json.load(f)
@@ -77,7 +76,7 @@ def _apply_saved_plan(
         console.print("\n[green]✓ Plan has no changes to apply.[/green]")
         return
 
-    # Use host from plan if not overridden, unless profile is specified
+    # Build configuration
     effective_host = host or saved_plan.host
     if not effective_host and not profile:
         error_console.print(
@@ -89,12 +88,9 @@ def _apply_saved_plan(
         effective_host, http_path, auth_type, token, client_id, client_secret, profile
     )
 
+    # Show progress during execution (for saved plans we show each action)
     try:
         with DatabricksConnector(config) as connector:
-            total_applied = 0
-            total_failed = 0
-            results_for_junit = []
-
             for plan in saved_plan.plans:
                 console.print(f"\n[bold]Applying plan for:[/bold] {plan.table_name}")
 
@@ -102,77 +98,25 @@ def _apply_saved_plan(
                     if action.sql:
                         try:
                             connector.execute(action.sql)
-                            console.print(f"  [green]✓[/green] {action.description}")
-                            total_applied += 1
+                            present_apply_progress(action.description, success=True)
                         except Exception as e:
-                            console.print(f"  [red]✗[/red] {action.description}: {e}")
-                            total_failed += 1
+                            present_apply_progress(action.description, success=False, error=str(e))
                     else:
                         console.print(f"  [yellow]⚠[/yellow] {action.description} (no SQL)")
 
-                # Create a mock result for JUnit reporting
-                results_for_junit.append(
-                    SyncResult(
-                        contract_name=plan.contract_name,
-                        table_name=plan.table_name,
-                        success=total_failed == 0,
-                        actions_applied=total_applied,
-                        plan=plan,
-                    )
-                )
+        # Execute the action to get structured results
+        result = execute_apply_saved_plan(saved_plan, config, str(plan_path))
 
-            # Summary
-            summary_msg = f"\n[bold]Summary:[/bold] {total_applied} applied, {total_failed} failed"
-            console.print(summary_msg)
-
-            # Generate output based on format
-            if output_format == "junit":
-                output_content = generate_junit_xml(
-                    results=results_for_junit,
-                    check_mode=False,
-                    output_path=None,
-                )
-                console.print(output_content)
-                if out:
-                    out.write_text(output_content)
-                    console.print(f"[green]✓[/green] JUnit XML written to: {out}")
-
-            elif output_format == "json":
-                output_data = {
-                    "command": "apply",
-                    "plan_file": str(plan_path),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "summary": {
-                        "applied": total_applied,
-                        "failed": total_failed,
-                    },
-                    "results": [
-                        {
-                            "contract_name": r.contract_name,
-                            "table_name": r.table_name,
-                            "success": r.success,
-                            "actions_applied": r.actions_applied,
-                        }
-                        for r in results_for_junit
-                    ],
-                }
-                output_content = json.dumps(output_data, indent=2)
-                console.print(output_content)
-                if out:
-                    out.write_text(output_content)
-                    console.print(f"[green]✓[/green] JSON written to: {out}")
-
-            elif out:
-                # Table format - write plain text summary to file
-                out.write_text(f"Summary: {total_applied} applied, {total_failed} failed")
-                console.print(f"[green]✓[/green] Output written to: {out}")
-
-            if total_failed > 0:
-                raise typer.Exit(1) from None
-
-    except DatabricksConnectionError as e:
-        error_console.print(f"\n[red]❌ Connection error:[/red] {e}")
+    except Exception as e:
+        present_error(f"Connection error: {e}")
         raise typer.Exit(1) from None
+
+    # Present the results
+    present_apply_result(result, output_format, out)
+
+    # Exit with error if any failures
+    if not result.success:
+        raise typer.Exit(1)
 
 
 @apply_app.callback(invoke_without_command=True)
@@ -320,13 +264,16 @@ def apply_contracts(
         )
         return
 
+    # Load contracts
     loader = ContractLoader()
     contracts = load_contracts(path, loader)
 
+    # Build configuration
     config = ensure_databricks_config(
         host, http_path, auth_type, token, client_id, client_secret, profile
     )
 
+    # Build sync options
     sync_options = SyncOptions(
         dry_run=False,
         catalog_override=catalog_override,
@@ -343,56 +290,17 @@ def apply_contracts(
         remove_permissions=remove_permissions,
     )
 
-    try:
-        with DatabricksConnector(config) as connector:
-            sync_service = SyncService(connector)
-            results = sync_service.sync_contracts(contracts, sync_options)
+    # Execute the apply action
+    result = execute_apply(contracts, config, sync_options)
 
-            # Generate output based on format
-            if output_format == "junit":
-                output_content = generate_junit_xml(
-                    results=results,
-                    check_mode=False,
-                    output_path=None,
-                )
-                console.print(output_content)
-                if out:
-                    out.write_text(output_content)
-                    console.print(f"\n[green]✓[/green] JUnit XML written to: {out}")
+    # Handle errors
+    if result.error:
+        present_error(f"Connection error: {result.error}")
+        raise typer.Exit(1)
 
-            elif output_format == "json":
-                output_data = {
-                    "command": "apply",
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "results": [
-                        {
-                            "contract_name": r.contract_name,
-                            "table_name": r.table_name,
-                            "success": r.success,
-                            "actions_applied": r.actions_applied,
-                            "errors": r.errors,
-                        }
-                        for r in results
-                    ],
-                }
-                output_content = json.dumps(output_data, indent=2)
-                console.print(output_content)
-                if out:
-                    out.write_text(output_content)
-                    console.print(f"\n[green]✓[/green] JSON written to: {out}")
+    # Present the results
+    present_apply_result(result, output_format, out)
 
-            else:  # table format (default)
-                formatted_results = format_sync_results(results)
-                console.print(formatted_results)
-                if out:
-                    out.write_text(str(formatted_results))
-                    console.print(f"\n[green]✓[/green] Output written to: {out}")
-
-            # Exit with error if any sync failed
-            if any(not r.success for r in results):
-                raise typer.Exit(1)
-
-    except DatabricksConnectionError as e:
-        error_console.print(f"\n[red]❌ Connection error:[/red] {e}")
-        raise typer.Exit(1) from None
-
+    # Exit with error if any sync failed
+    if not result.success:
+        raise typer.Exit(1)
