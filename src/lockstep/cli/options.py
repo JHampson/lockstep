@@ -124,4 +124,3 @@ VerboseArg = Annotated[bool, verbose_option]
 QuietArg = Annotated[bool, quiet_option]
 FormatArg = Annotated[str | None, format_option]
 OutputArg = Annotated[Path | None, output_option]
-

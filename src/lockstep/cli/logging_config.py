@@ -35,4 +35,3 @@ def setup_logging(verbose: bool, quiet: bool) -> None:
     # Reduce noise from libraries
     logging.getLogger("databricks").setLevel(logging.WARNING)
     logging.getLogger("urllib3").setLevel(logging.WARNING)
-

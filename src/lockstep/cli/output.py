@@ -303,13 +303,9 @@ def present_validate_result(
         for file_result in result.results:
             if file_result.valid:
                 if options.verbose:
-                    results_table.add_row(
-                        file_result.relative_path, "[green]✓ Valid[/green]", ""
-                    )
+                    results_table.add_row(file_result.relative_path, "[green]✓ Valid[/green]", "")
                 elif not options.quiet:
-                    results_table.add_row(
-                        file_result.relative_path, "[green]✓ Valid[/green]"
-                    )
+                    results_table.add_row(file_result.relative_path, "[green]✓ Valid[/green]")
             else:
                 error_details = "\n".join(file_result.errors[:3])
                 if len(file_result.errors) > 3:
@@ -336,7 +332,9 @@ def present_validate_result(
                     lines.append(f"✓ {file_result.relative_path}: Valid")
                 else:
                     lines.append(f"✗ {file_result.relative_path}: Invalid")
-                    errors_to_show = file_result.errors if options.verbose else file_result.errors[:3]
+                    errors_to_show = (
+                        file_result.errors if options.verbose else file_result.errors[:3]
+                    )
                     for err in errors_to_show:
                         lines.append(f"  - {err}")
             out_path.write_text("\n".join(lines))

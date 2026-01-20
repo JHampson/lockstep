@@ -103,7 +103,9 @@ def _apply_saved_plan(
     )
 
     if not effective_conn.host and not effective_conn.profile:
-        present_error("No host specified. Use --host, --profile, or ensure the plan contains a host.")
+        present_error(
+            "No host specified. Use --host, --profile, or ensure the plan contains a host."
+        )
         raise typer.Exit(1) from None
 
     try:
@@ -335,7 +337,9 @@ def apply_contracts(
 
     if result.has_validation_errors:
         present_contract_load_error(
-            ContractLoadingError("Some contracts failed validation", validation_errors=result.validation_errors)
+            ContractLoadingError(
+                "Some contracts failed validation", validation_errors=result.validation_errors
+            )
         )
         if not result.contracts:
             raise typer.Exit(1)

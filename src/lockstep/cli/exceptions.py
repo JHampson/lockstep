@@ -63,4 +63,3 @@ class ContractLoadingError(Exception):
         self.errors = errors or []
         self.validation_errors = validation_errors or []
         super().__init__(message)
-

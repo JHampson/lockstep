@@ -711,4 +711,3 @@ class TestExecuteValidate:
         assert result.total == 2
         assert result.valid_count == 1
         assert result.invalid_count == 1
-

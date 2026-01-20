@@ -281,9 +281,7 @@ def execute_validate(
 
     for yaml_file in files:
         is_valid, errors = loader.validate_file(yaml_file)
-        rel_path = str(
-            yaml_file.relative_to(path) if path.is_dir() else yaml_file.name
-        )
+        rel_path = str(yaml_file.relative_to(path) if path.is_dir() else yaml_file.name)
 
         results.append(
             FileValidationResult(
@@ -310,4 +308,3 @@ def execute_validate(
         valid_count=valid_count,
         invalid_count=invalid_count,
     )
-

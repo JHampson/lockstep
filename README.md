@@ -181,7 +181,7 @@ auth_type = databricks-cli
 
 [production]
 host = https://prod-workspace.databricks.com
-token = dapi1234567890abcdef
+token = dapi_your_token_here
 ```
 
 > **Note:** The `--sql-endpoint` option accepts either the full path (`/sql/1.0/warehouses/abc123`) or just the warehouse ID (`abc123`). Lockstep will automatically normalize it to the full path.

@@ -186,7 +186,9 @@ class DatabricksConnector:
 
         Uses signal-based timeout on Unix, threading-based on Windows.
         """
-        timeout = self.config.timeout_seconds if self.config.timeout_seconds < 60 else CONNECTION_TIMEOUT
+        timeout = (
+            self.config.timeout_seconds if self.config.timeout_seconds < 60 else CONNECTION_TIMEOUT
+        )
 
         # Use threading-based timeout (works on all platforms)
         result: list[Connection | Exception] = []

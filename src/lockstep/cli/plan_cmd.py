@@ -200,7 +200,9 @@ def plan_changes(
 
     if result.has_validation_errors:
         present_contract_load_error(
-            ContractLoadingError("Some contracts failed validation", validation_errors=result.validation_errors)
+            ContractLoadingError(
+                "Some contracts failed validation", validation_errors=result.validation_errors
+            )
         )
         if not result.contracts:
             raise typer.Exit(1)
