@@ -270,9 +270,7 @@ class SQLGenerator:
         if primary_key_columns:
             pk_cols = ", ".join(self._escape_identifier(c) for c in primary_key_columns)
             # Use escaped parts for constraint name
-            safe_name = "_".join(
-                part.replace("`", "") for part in escaped_table.split(".")
-            )
+            safe_name = "_".join(part.replace("`", "") for part in escaped_table.split("."))
             col_defs.append(f"CONSTRAINT pk_{safe_name} PRIMARY KEY ({pk_cols})")
 
         columns_sql = ",\n  ".join(col_defs)
@@ -374,9 +372,7 @@ class SQLGenerator:
         escaped_table = self._escape_table_name(full_table_name)
         if not constraint_name:
             # Generate safe constraint name from escaped table parts
-            safe_name = "_".join(
-                part.replace("`", "") for part in escaped_table.split(".")
-            )
+            safe_name = "_".join(part.replace("`", "") for part in escaped_table.split("."))
             constraint_name = f"pk_{safe_name}"
 
         col_list = ", ".join(self._escape_identifier(c) for c in columns)

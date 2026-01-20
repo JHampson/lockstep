@@ -103,10 +103,7 @@ class TestSQLGenerator:
     def test_alter_column_type_with_parameters(self, sql_gen: SQLGenerator) -> None:
         """Test ALTER COLUMN TYPE with parameterized type."""
         sql = sql_gen.alter_column_type("main.default.test", "my_col", "DECIMAL(18,2)")
-        assert (
-            sql
-            == "ALTER TABLE `main`.`default`.`test` ALTER COLUMN `my_col` TYPE DECIMAL(18,2)"
-        )
+        assert sql == "ALTER TABLE `main`.`default`.`test` ALTER COLUMN `my_col` TYPE DECIMAL(18,2)"
 
     def test_update_table_description(self, sql_gen: SQLGenerator) -> None:
         """Test updating table description."""
@@ -176,9 +173,7 @@ class TestSQLGenerator:
     def test_certification_via_tag(self, sql_gen: SQLGenerator) -> None:
         """Test certification is handled via standard tag methods."""
         # Certification is set using regular set_table_tag
-        sql = sql_gen.set_table_tag(
-            "main.default.test", "system.certification_status", "certified"
-        )
+        sql = sql_gen.set_table_tag("main.default.test", "system.certification_status", "certified")
         assert "SET TAGS ('system.certification_status' = 'certified')" in sql
 
         # Certification is cleared using regular remove_table_tag
@@ -208,9 +203,7 @@ class TestSQLGenerator:
     def test_revoke_permission(self, sql_gen: SQLGenerator) -> None:
         """Test REVOKE permission statement."""
         sql = sql_gen.revoke_permission("main.default.test", "data_engineers", "MODIFY")
-        assert (
-            sql == "REVOKE MODIFY ON TABLE `main`.`default`.`test` FROM `data_engineers`"
-        )
+        assert sql == "REVOKE MODIFY ON TABLE `main`.`default`.`test` FROM `data_engineers`"
 
 
 class TestSQLInjectionProtection:
@@ -278,9 +271,7 @@ class TestSQLInjectionProtection:
             sql_gen.grant_permission("main.default.test", "user", "INVALID")
 
         with pytest.raises(SQLInjectionError, match="Invalid privilege"):
-            sql_gen.grant_permission(
-                "main.default.test", "user", "SELECT; DROP TABLE x; --"
-            )
+            sql_gen.grant_permission("main.default.test", "user", "SELECT; DROP TABLE x; --")
 
     def test_valid_privileges(self, sql_gen: SQLGenerator) -> None:
         """Test that all valid privileges work."""
@@ -298,9 +289,7 @@ class TestSQLInjectionProtection:
     def test_principal_with_special_characters(self, sql_gen: SQLGenerator) -> None:
         """Test that principals with special characters are escaped."""
         # Email addresses with special chars should be escaped
-        sql = sql_gen.grant_permission(
-            "main.default.test", "user@example.com", "SELECT"
-        )
+        sql = sql_gen.grant_permission("main.default.test", "user@example.com", "SELECT")
         assert "`user@example.com`" in sql
 
         # Group names with backticks should be escaped
@@ -309,8 +298,6 @@ class TestSQLInjectionProtection:
 
     def test_description_injection_escaped(self, sql_gen: SQLGenerator) -> None:
         """Test that injection attempts in descriptions are escaped."""
-        sql = sql_gen.update_table_description(
-            "main.default.test", "test'; DROP TABLE x; --"
-        )
+        sql = sql_gen.update_table_description("main.default.test", "test'; DROP TABLE x; --")
         # Single quotes should be doubled (escaped)
         assert "test''; DROP TABLE x; --" in sql
