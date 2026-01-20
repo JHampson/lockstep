@@ -215,7 +215,7 @@ class ODCSRole(BaseModel):
     """ODCS v3 role definition for documenting IAM roles.
 
     This follows the official ODCS format. For actual GRANT/REVOKE operations,
-    define principal, principal_type, and privileges in customProperties.
+    define principal and privileges in customProperties.
 
     Example YAML (single principal):
         roles:
@@ -225,8 +225,6 @@ class ODCSRole(BaseModel):
             customProperties:
               - property: principal
                 value: data_engineers
-              - property: principal_type
-                value: group
               - property: privileges
                 value: [SELECT, MODIFY]
 
@@ -240,9 +238,7 @@ class ODCSRole(BaseModel):
                 value:
                   - data_engineers
                   - data_analysts
-                  - data_scientists
-              - property: principal_type
-                value: group
+                  - admin@company.com
               - property: privileges
                 value: [SELECT]
     """
@@ -283,7 +279,6 @@ class ODCSRole(BaseModel):
             List of PermissionGrant objects, one per principal.
         """
         principals: list[str] = []
-        principal_type = "group"
         privileges: list[str] = []
 
         for prop in self.custom_properties:
@@ -295,8 +290,6 @@ class ODCSRole(BaseModel):
                     principals = [prop_value]
                 elif isinstance(prop_value, list):
                     principals = [str(p) for p in prop_value]
-            elif prop_name == "principal_type" and isinstance(prop_value, str):
-                principal_type = prop_value
             elif prop_name == "privileges" and isinstance(prop_value, list):
                 privileges = [str(p).upper() for p in prop_value]
 
@@ -307,7 +300,6 @@ class ODCSRole(BaseModel):
                 grants.append(
                     PermissionGrant(
                         principal=principal,
-                        principal_type=principal_type,
                         privileges=privileges,
                     )
                 )
@@ -321,39 +313,19 @@ class PermissionGrant(BaseModel):
 
     Example in customProperties:
         customProperties:
-          - property: permissions
-            value:
-              - principal: data_engineers
-                type: group
-                privileges:
-                  - SELECT
-                  - MODIFY
+          - property: principal
+            value: data_engineers
+          - property: privileges
+            value: [SELECT, MODIFY]
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
     principal: str = Field(..., description="User email or group name")
-    principal_type: str = Field(
-        default="group",
-        alias="type",
-        description="Type of principal: 'user' or 'group'",
-    )
     privileges: list[str] = Field(
         default_factory=list,
         description="List of privileges (SELECT, MODIFY, ALL PRIVILEGES, etc.)",
     )
-
-    @field_validator("principal_type", mode="before")
-    @classmethod
-    def normalize_principal_type(cls, v: str) -> str:
-        """Normalize principal type to lowercase."""
-        if isinstance(v, str):
-            v = v.lower()
-            if v in ("user", "users"):
-                return "user"
-            if v in ("group", "groups"):
-                return "group"
-        return v
 
     @field_validator("privileges", mode="before")
     @classmethod
@@ -587,8 +559,8 @@ class Contract(BaseModel):
     def permission_grants(self) -> list[PermissionGrant]:
         """Extract permission grants from roles' customProperties.
 
-        Each role can define principal (single or list), principal_type,
-        and privileges in its customProperties section.
+        Each role can define principal (single or list) and privileges
+        in its customProperties section.
 
         Returns:
             List of PermissionGrant objects for GRANT/REVOKE operations.

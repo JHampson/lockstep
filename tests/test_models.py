@@ -273,7 +273,6 @@ class TestODCSRole:
             access="read_write",
             customProperties=[
                 {"property": "principal", "value": "data_engineers"},
-                {"property": "principal_type", "value": "group"},
                 {"property": "privileges", "value": ["SELECT", "MODIFY"]},
             ],
         )
@@ -281,7 +280,6 @@ class TestODCSRole:
         grants = role.get_permission_grants()
         assert len(grants) == 1
         assert grants[0].principal == "data_engineers"
-        assert grants[0].principal_type == "group"
         assert grants[0].privileges == ["SELECT", "MODIFY"]
 
     def test_multiple_principals_list(self) -> None:
@@ -296,7 +294,6 @@ class TestODCSRole:
                     "property": "principal",
                     "value": ["data_engineers", "data_analysts", "data_scientists"],
                 },
-                {"property": "principal_type", "value": "group"},
                 {"property": "privileges", "value": ["SELECT"]},
             ],
         )
@@ -306,9 +303,7 @@ class TestODCSRole:
         assert grants[0].principal == "data_engineers"
         assert grants[1].principal == "data_analysts"
         assert grants[2].principal == "data_scientists"
-        # All should have same privileges and type
         for grant in grants:
-            assert grant.principal_type == "group"
             assert grant.privileges == ["SELECT"]
 
     def test_no_principal_returns_empty_list(self) -> None:

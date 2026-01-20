@@ -693,23 +693,28 @@ roles:
     access: read_write
     customProperties:
       - property: principal
-        value: data_engineers
-      - property: principal_type
-        value: group
+        value: data_engineers      # Group (no @ symbol)
       - property: privileges
         value:
           - SELECT
           - MODIFY
+
   - role: data_analysts
     access: read_only
     customProperties:
       - property: principal
-        value: data_analysts
-      - property: principal_type
-        value: group
+        value: data_analysts       # Group (no @ symbol)
       - property: privileges
         value:
           - SELECT
+
+  - role: admin_user
+    customProperties:
+      - property: principal
+        value: admin@company.com   # User (has @ symbol)
+      - property: privileges
+        value:
+          - ALL PRIVILEGES
 ```
 
 #### Multiple Principals with Same Privileges
@@ -727,8 +732,6 @@ roles:
           - data_engineers
           - data_analysts
           - data_scientists
-      - property: principal_type
-        value: group
       - property: privileges
         value:
           - SELECT
@@ -738,8 +741,7 @@ This is equivalent to defining three separate roles but more concise when multip
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `principal` | string or list | Yes | User email, group name, or list of principals |
-| `principal_type` | string | No | `user` or `group` (default: `group`) |
+| `principal` | string or list | Yes | User email (for users) or group name (for groups) |
 | `privileges` | list | Yes | List of privileges to grant |
 
 **Supported Permissions:**
@@ -870,8 +872,6 @@ roles:
     customProperties:
       - property: principal
         value: data_engineers
-      - property: principal_type
-        value: group
       - property: privileges
         value:
           - SELECT
@@ -882,9 +882,7 @@ roles:
     description: Analytics team
     customProperties:
       - property: principal
-        value: data_analysts
-      - property: principal_type
-        value: group
+        value: data_analysts         # Group (no @)
       - property: privileges
         value:
           - SELECT
@@ -894,9 +892,7 @@ roles:
     description: Admin user
     customProperties:
       - property: principal
-        value: admin@company.com
-      - property: principal_type
-        value: user
+        value: admin@company.com     # User (has @)
       - property: privileges
         value:
           - ALL PRIVILEGES
