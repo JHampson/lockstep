@@ -685,27 +685,61 @@ roles:
 
 ### Permissions (Custom Properties)
 
-For actual `GRANT`/`REVOKE` operations in Unity Catalog, define permissions in `customProperties`:
+For actual `GRANT`/`REVOKE` operations in Unity Catalog, define permissions in `customProperties` within each role:
 
 ```yaml
-customProperties:
-  - property: permissions
-    value:
-      - principal: data_engineers
-        type: group
-        privileges:
+roles:
+  - role: data_engineers
+    access: read_write
+    customProperties:
+      - property: principal
+        value: data_engineers
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
           - SELECT
           - MODIFY
-      - principal: analyst@company.com
-        type: user
-        privileges:
+  - role: data_analysts
+    access: read_only
+    customProperties:
+      - property: principal
+        value: data_analysts
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
           - SELECT
 ```
 
+#### Multiple Principals with Same Privileges
+
+To grant the same privileges to multiple principals, you can specify `principal` as a list:
+
+```yaml
+roles:
+  - role: shared_read_access
+    access: read_only
+    description: Multiple teams with read access
+    customProperties:
+      - property: principal
+        value:
+          - data_engineers
+          - data_analysts
+          - data_scientists
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
+          - SELECT
+```
+
+This is equivalent to defining three separate roles but more concise when multiple groups need identical permissions.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `principal` | string | Yes | User email or group name |
-| `type` | string | No | `user` or `group` (default: `group`) |
+| `principal` | string or list | Yes | User email, group name, or list of principals |
+| `principal_type` | string | No | `user` or `group` (default: `group`) |
 | `privileges` | list | Yes | List of privileges to grant |
 
 **Supported Permissions:**
@@ -826,35 +860,58 @@ Lockstep can manage table permissions (GRANT/REVOKE) based on permissions define
 
 ### Defining Permissions
 
-Add a `customProperties` section with `permissions` to your contract (ODCS-compliant format):
+Define permissions using `customProperties` within each role:
 
 ```yaml
-# ODCS v3 roles for documentation/governance
 roles:
   - role: data_engineers
     access: read_write
     description: Engineering team with full access
+    customProperties:
+      - property: principal
+        value: data_engineers
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
+          - SELECT
+          - MODIFY
+
   - role: data_analysts
     access: read_only
     description: Analytics team
+    customProperties:
+      - property: principal
+        value: data_analysts
+      - property: principal_type
+        value: group
+      - property: privileges
+        value:
+          - SELECT
 
-# Permissions for GRANT/REVOKE operations
-customProperties:
-  - property: permissions
-    value:
-      - principal: data_engineers
-        type: group
-        privileges:
-          - SELECT
-          - MODIFY
-      - principal: data_analysts
-        type: group
-        privileges:
-          - SELECT
-      - principal: admin@company.com
-        type: user
-        privileges:
+  - role: admin
+    access: read_write
+    description: Admin user
+    customProperties:
+      - property: principal
+        value: admin@company.com
+      - property: principal_type
+        value: user
+      - property: privileges
+        value:
           - ALL PRIVILEGES
+
+  # Multiple principals with same privileges
+  - role: shared_access
+    description: Multiple teams with read access
+    customProperties:
+      - property: principal
+        value:
+          - team_alpha
+          - team_beta
+      - property: privileges
+        value:
+          - SELECT
 ```
 
 ### Plan Output

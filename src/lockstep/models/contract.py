@@ -217,7 +217,7 @@ class ODCSRole(BaseModel):
     This follows the official ODCS format. For actual GRANT/REVOKE operations,
     define principal, principal_type, and privileges in customProperties.
 
-    Example YAML:
+    Example YAML (single principal):
         roles:
           - role: data_engineers
             access: read_write
@@ -229,6 +229,22 @@ class ODCSRole(BaseModel):
                 value: group
               - property: privileges
                 value: [SELECT, MODIFY]
+
+    Example YAML (multiple principals with same privileges):
+        roles:
+          - role: shared_access
+            access: read_only
+            description: Multiple teams with read access
+            customProperties:
+              - property: principal
+                value:
+                  - data_engineers
+                  - data_analysts
+                  - data_scientists
+              - property: principal_type
+                value: group
+              - property: privileges
+                value: [SELECT]
     """
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
@@ -242,13 +258,31 @@ class ODCSRole(BaseModel):
         description="Custom properties including permission details",
     )
 
-    def get_permission_grant(self) -> PermissionGrant | None:
-        """Extract PermissionGrant from customProperties if defined.
+    def get_permission_grants(self) -> list[PermissionGrant]:
+        """Extract PermissionGrant(s) from customProperties if defined.
+
+        Supports both single principal (string) and multiple principals (list).
+
+        Example with single principal:
+            customProperties:
+              - property: principal
+                value: data_engineers
+              - property: privileges
+                value: [SELECT, MODIFY]
+
+        Example with multiple principals:
+            customProperties:
+              - property: principal
+                value:
+                  - data_engineers
+                  - data_analysts
+              - property: privileges
+                value: [SELECT]
 
         Returns:
-            PermissionGrant if principal and privileges are defined, else None.
+            List of PermissionGrant objects, one per principal.
         """
-        principal = None
+        principals: list[str] = []
         principal_type = "group"
         privileges: list[str] = []
 
@@ -256,20 +290,28 @@ class ODCSRole(BaseModel):
             prop_name = prop.get("property", "")
             prop_value = prop.get("value")
 
-            if prop_name == "principal" and isinstance(prop_value, str):
-                principal = prop_value
+            if prop_name == "principal":
+                if isinstance(prop_value, str):
+                    principals = [prop_value]
+                elif isinstance(prop_value, list):
+                    principals = [str(p) for p in prop_value]
             elif prop_name == "principal_type" and isinstance(prop_value, str):
                 principal_type = prop_value
             elif prop_name == "privileges" and isinstance(prop_value, list):
                 privileges = [str(p).upper() for p in prop_value]
 
-        if principal and privileges:
-            return PermissionGrant(
-                principal=principal,
-                principal_type=principal_type,
-                privileges=privileges,
-            )
-        return None
+        # Create a PermissionGrant for each principal
+        grants = []
+        if principals and privileges:
+            for principal in principals:
+                grants.append(
+                    PermissionGrant(
+                        principal=principal,
+                        principal_type=principal_type,
+                        privileges=privileges,
+                    )
+                )
+        return grants
 
 
 class PermissionGrant(BaseModel):
@@ -545,17 +587,15 @@ class Contract(BaseModel):
     def permission_grants(self) -> list[PermissionGrant]:
         """Extract permission grants from roles' customProperties.
 
-        Each role can define principal, principal_type, and privileges
-        in its customProperties section.
+        Each role can define principal (single or list), principal_type,
+        and privileges in its customProperties section.
 
         Returns:
             List of PermissionGrant objects for GRANT/REVOKE operations.
         """
         grants = []
         for role in self.roles:
-            perm_grant = role.get_permission_grant()
-            if perm_grant is not None:
-                grants.append(perm_grant)
+            grants.extend(role.get_permission_grants())
         return grants
 
     def get_full_table_name(
