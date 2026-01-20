@@ -10,6 +10,7 @@ import typer
 
 from lockstep.cli.actions import execute_apply, execute_apply_saved_plan
 from lockstep.cli.common import (
+    AlterColumnTypesArg,
     AuthTypeArg,
     CatalogOverrideArg,
     ClientIdArg,
@@ -237,6 +238,7 @@ def apply_contracts(
             help="Revoke permissions not in contract roles (default: disabled).",
         ),
     ] = False,
+    alter_column_types: AlterColumnTypesArg = False,
     catalog_override: CatalogOverrideArg = None,
     schema_override: SchemaOverrideArg = None,
     table_prefix: TablePrefixArg = None,
@@ -380,6 +382,7 @@ def apply_contracts(
         remove_tags=remove_tags,
         remove_constraints=remove_constraints,
         remove_permissions=remove_permissions,
+        alter_column_types=alter_column_types,
     )
 
     # Execute the apply action

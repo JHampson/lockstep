@@ -80,6 +80,12 @@ table_prefix_option = typer.Option(
     help="Prefix to add to table names.",
 )
 
+# Destructive operation options
+alter_column_types_option = typer.Option(
+    "--alter-column-types",
+    help="Allow altering column types (destructive, may cause data loss).",
+)
+
 # Output options
 verbose_option = typer.Option(
     "--verbose",
@@ -120,6 +126,7 @@ ClientSecretArg = Annotated[str | None, client_secret_option]
 CatalogOverrideArg = Annotated[str | None, catalog_override_option]
 SchemaOverrideArg = Annotated[str | None, schema_override_option]
 TablePrefixArg = Annotated[str | None, table_prefix_option]
+AlterColumnTypesArg = Annotated[bool, alter_column_types_option]
 VerboseArg = Annotated[bool, verbose_option]
 QuietArg = Annotated[bool, quiet_option]
 FormatArg = Annotated[str | None, format_option]

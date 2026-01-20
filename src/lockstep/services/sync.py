@@ -52,6 +52,8 @@ class SyncOptions:
     remove_tags: bool = False
     remove_constraints: bool = False
     remove_permissions: bool = False  # Destructive - revokes permissions
+    # Destructive type changes (default False - may cause data loss)
+    alter_column_types: bool = False
 
 
 class SyncService:
@@ -135,6 +137,10 @@ class SyncService:
 
             if not options.remove_permissions:
                 plan = plan.filter_no_remove_permissions()
+
+            # Filter out type changes if disabled (default)
+            if not options.alter_column_types:
+                plan = plan.filter_no_alter_column_types()
 
             result.plan = plan
 

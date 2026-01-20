@@ -19,7 +19,7 @@ A Python CLI tool for synchronizing [Open Data Contract Standard (ODCS)](https:/
 - **Tag Synchronization**: Create, update, and remove tags on tables and columns
 - **Permission Management**: Grant and revoke table permissions based on contract-defined roles
 - **Certification**: Manage Unity Catalog certification via `system.certification_status` tag
-- **Type Mismatch Detection**: Warns when column types differ between contract and catalog
+- **Column Type Changes**: Detects and optionally applies column type changes with `--alter-column-types`
 - **Idempotent Operations**: Safe to run multiple times - only applies necessary changes
 - **Plan & Apply Workflow**: Preview changes with `plan`, apply with `apply` (similar to Terraform)
 - **Granular Control**: Fine-grained `--add-*` and `--remove-*` options for selective sync
@@ -511,6 +511,9 @@ lockstep apply PATH [OPTIONS]
 - `--remove-constraints/--no-remove-constraints`: Remove constraints not in contract
 - `--remove-permissions/--no-remove-permissions`: Revoke permissions not in contract roles
 
+**Destructive Type Changes (disabled by default):**
+- `--alter-column-types`: Allow altering column data types (may cause data loss)
+
 **Override Options:**
 - `--catalog-override TEXT`: Override catalog name from contracts
 - `--schema-override TEXT`: Override schema name from contracts
@@ -559,6 +562,9 @@ lockstep apply contracts/ --remove-columns
 
 # Full sync - remove everything not in contract
 lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
+
+# Allow altering column types (destructive - may cause data loss)
+lockstep apply contracts/ --alter-column-types
 
 # Override catalog for dev environment
 lockstep apply contracts/ --catalog-override dev_catalog
@@ -776,14 +782,17 @@ By default, the tool will **ADD** but not **REMOVE**:
 | Remove tags | ❌ Disabled | `--remove-tags` |
 | Remove constraints | ❌ Disabled | `--remove-constraints` |
 | Revoke permissions | ❌ Disabled | `--remove-permissions` |
+| Alter column types | ❌ Disabled | `--alter-column-types` |
 
 ### Full Sync Mode
 
-To fully synchronize Unity Catalog with the contract (including removals):
+To fully synchronize Unity Catalog with the contract (including removals and type changes):
 
 ```bash
-lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints
+lockstep apply contracts/ --remove-columns --remove-tags --remove-constraints --alter-column-types
 ```
+
+> ⚠️ **Warning:** The `--alter-column-types` flag can cause data loss if the type change is incompatible (e.g., changing from STRING to INT when the column contains non-numeric data).
 
 ### Selective Sync Examples
 
@@ -808,52 +817,89 @@ The CLI uses specific exit codes for CI/CD integration:
 | **1** | Error - sync failed, connection error, or validation error |
 | **2** | Drift detected (`lockstep plan` only) |
 
-## Type Mismatch Detection
+## Column Type Changes
 
-When running `lockstep plan`, the tool detects column data type mismatches between your contract and Unity Catalog. These are shown as **warnings** because changing column types requires manual intervention (data migration, potential data loss).
+When running `lockstep plan`, the tool detects column data type mismatches between your contract and Unity Catalog. By default, type changes are shown in the plan but **not applied** because they can cause data loss.
 
 ### Example Output
 
 ```
 ╭───── 📋 customer_contract → main.sales.customers ──────╮
-│       Action         Target                Details     │
-│  ⚠️    Type Mismatch  main.sales.customer…  column=id, │
-│                                           contract_   │
-│                                           type=INT,   │
-│                                           catalog_    │
-│                                           type=STRING │
-│                                                       │
-│ Summary: 1 type_mismatch                              │
-│ ⚠️  Plan contains type mismatches requiring manual    │
-│    intervention                                       │
-╰───────────────────────────────────────────────────────╯
+│       Action              Target                Details     │
+│  🔄   Alter Column Type   main.sales.customer…  column=id,  │
+│                                                 INT → STRING│
+│                                                             │
+│ Summary: 1 update_column_type                               │
+│ ⚠️  Plan contains destructive changes                       │
+╰─────────────────────────────────────────────────────────────╯
 ```
+
+### Applying Type Changes
+
+To apply column type changes, use the `--alter-column-types` flag:
+
+```bash
+# Show type changes in plan (default)
+lockstep plan contracts/
+
+# Hide type changes from plan
+lockstep plan contracts/ --ignore-column-types
+
+# Apply type changes (destructive)
+lockstep apply contracts/ --alter-column-types
+```
+
+> ⚠️ **Warning:** The `--alter-column-types` flag can cause data loss if the type change is incompatible (e.g., changing from STRING to INT when the column contains non-numeric data).
 
 ### Type Equivalence
 
 Lockstep recognizes common type aliases as equivalent **only when neither has parameters**:
 
-| No Warning (Equivalent) | Warning (Different) |
-|------------------------|---------------------|
+| No Change (Equivalent) | Type Change (Different) |
+|------------------------|-------------------------|
 | `STRING` ↔ `VARCHAR` | `STRING` ↔ `VARCHAR(100)` |
 | `STRING` ↔ `TEXT` | `VARCHAR(100)` ↔ `VARCHAR(200)` |
 | `INT` ↔ `INTEGER` | `DECIMAL` ↔ `DECIMAL(10,2)` |
 | `LONG` ↔ `BIGINT` | `INT` ↔ `STRING` |
 | `BOOLEAN` ↔ `BOOL` | Any different types |
 
-**Key rule**: If either type has parameters (like length or precision), warnings are shown even if the base types are aliases. This ensures you're aware of constraint differences like `VARCHAR(100)` vs `VARCHAR(200)`.
+**Key rule**: If either type has parameters (like length or precision), type changes are detected even if the base types are aliases. This ensures you're aware of constraint differences like `VARCHAR(100)` vs `VARCHAR(200)`.
 
-### Handling Type Mismatches
+### Delta Lake Type Change Limitations
 
-Type mismatch warnings have **no SQL** - they require manual intervention:
+Delta Lake restricts which column type changes are allowed. Common limitations:
 
-1. **Review the mismatch**: Is this intentional or an error in the contract?
-2. **Update the contract**: Change the `logicalType` to match the existing column
-3. **Migrate the data**: If the change is intentional, manually alter the column type in Databricks
+| Type Change | Supported | Notes |
+|-------------|-----------|-------|
+| `INT` → `BIGINT` | ❌ No | Numeric widening not supported |
+| `FLOAT` → `DOUBLE` | ❌ No | Numeric widening not supported |
+| `STRING` → `STRING` | ✅ Yes | Same type (no change) |
+| Widening `DECIMAL` precision | ⚠️ Sometimes | Depends on specific precision values |
 
-```sql
--- Example: Change column type (may require data migration)
-ALTER TABLE main.sales.customers ALTER COLUMN id TYPE INT;
+If a type change is not supported by Delta Lake, you'll see an error like:
+```
+[DELTA_UNSUPPORTED_ALTER_TABLE_CHANGE_COL_OP] ALTER TABLE CHANGE COLUMN is not supported
+for changing column X from TYPE_A to TYPE_B.
+```
+
+**Workaround for unsupported type changes:**
+1. Create a new column with the desired type
+2. Copy data from the old column
+3. Drop the old column
+4. Rename the new column
+
+### Handling Type Changes Safely
+
+1. **Review the plan**: Run `lockstep plan` to see what type changes would be made
+2. **Verify data compatibility**: Ensure existing data can be safely converted to the new type
+3. **Check Delta Lake support**: Not all type changes are supported (see above)
+4. **Back up your data**: Consider creating a backup before applying destructive changes
+5. **Apply changes**: Run `lockstep apply contracts/ --alter-column-types`
+
+```bash
+# Safe workflow for type changes
+lockstep plan contracts/                        # Review changes
+lockstep apply contracts/ --alter-column-types  # Apply after review
 ```
 
 ## Permission Management

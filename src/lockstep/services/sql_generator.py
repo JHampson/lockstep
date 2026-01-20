@@ -115,6 +115,25 @@ class SQLGenerator:
         """Generate ALTER TABLE DROP COLUMN statement."""
         return f"ALTER TABLE {full_table_name} DROP COLUMN {self._escape_identifier(column_name)}"
 
+    def alter_column_type(self, full_table_name: str, column_name: str, new_type: str) -> str:
+        """Generate ALTER TABLE ALTER COLUMN TYPE statement.
+
+        Note: Not all type changes are safe. Narrowing types or incompatible
+        conversions may fail or cause data loss.
+
+        Args:
+            full_table_name: Fully qualified table name.
+            column_name: Name of the column to alter.
+            new_type: New Databricks SQL data type.
+
+        Returns:
+            ALTER COLUMN TYPE SQL statement.
+        """
+        return (
+            f"ALTER TABLE {full_table_name} "
+            f"ALTER COLUMN {self._escape_identifier(column_name)} TYPE {new_type}"
+        )
+
     def update_table_description(self, full_table_name: str, description: str) -> str:
         """Generate ALTER TABLE SET COMMENT statement."""
         return f"ALTER TABLE {full_table_name} SET TBLPROPERTIES ('comment' = '{self._escape_string(description)}')"

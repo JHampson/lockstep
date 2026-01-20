@@ -34,6 +34,7 @@ from lockstep.cli.logging_config import setup_logging
 
 # Re-export options
 from lockstep.cli.options import (
+    AlterColumnTypesArg,
     AuthTypeArg,
     CatalogOverrideArg,
     ClientIdArg,
@@ -48,6 +49,7 @@ from lockstep.cli.options import (
     TablePrefixArg,
     TokenArg,
     VerboseArg,
+    alter_column_types_option,
     auth_type_option,
     catalog_override_option,
     client_id_option,
@@ -101,6 +103,7 @@ __all__ = [
     "catalog_override_option",
     "schema_override_option",
     "table_prefix_option",
+    "alter_column_types_option",
     "verbose_option",
     "quiet_option",
     "format_option",
@@ -116,6 +119,7 @@ __all__ = [
     "CatalogOverrideArg",
     "SchemaOverrideArg",
     "TablePrefixArg",
+    "AlterColumnTypesArg",
     "VerboseArg",
     "QuietArg",
     "FormatArg",

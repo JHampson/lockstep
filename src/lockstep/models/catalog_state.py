@@ -149,11 +149,19 @@ class SyncAction:
 DESTRUCTIVE_ACTION_TYPES: frozenset[ActionType] = frozenset(
     {
         ActionType.DROP_COLUMN,
+        ActionType.UPDATE_COLUMN_TYPE,
         ActionType.REMOVE_TABLE_TAG,
         ActionType.REMOVE_COLUMN_TAG,
         ActionType.DROP_PRIMARY_KEY,
         ActionType.DROP_NOT_NULL,
         ActionType.REVOKE_PERMISSION,
+    }
+)
+
+# Action types for altering column types (destructive - may cause data loss)
+COLUMN_TYPE_CHANGE_ACTION_TYPES: frozenset[ActionType] = frozenset(
+    {
+        ActionType.UPDATE_COLUMN_TYPE,
     }
 )
 
@@ -360,6 +368,19 @@ class SyncPlan:
             action
             for action in self.actions
             if action.action_type not in PERMISSION_REMOVE_ACTION_TYPES
+        ]
+        return SyncPlan(
+            contract_name=self.contract_name,
+            table_name=self.table_name,
+            actions=filtered_actions,
+        )
+
+    def filter_no_alter_column_types(self) -> SyncPlan:
+        """Return a new plan without column type change actions."""
+        filtered_actions = [
+            action
+            for action in self.actions
+            if action.action_type not in COLUMN_TYPE_CHANGE_ACTION_TYPES
         ]
         return SyncPlan(
             contract_name=self.contract_name,

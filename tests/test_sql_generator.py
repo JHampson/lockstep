@@ -95,6 +95,16 @@ class TestSQLGenerator:
         sql = sql_gen.drop_column("main.default.test", "old_col")
         assert sql == "ALTER TABLE main.default.test DROP COLUMN `old_col`"
 
+    def test_alter_column_type(self, sql_gen: SQLGenerator) -> None:
+        """Test ALTER COLUMN TYPE."""
+        sql = sql_gen.alter_column_type("main.default.test", "my_col", "BIGINT")
+        assert sql == "ALTER TABLE main.default.test ALTER COLUMN `my_col` TYPE BIGINT"
+
+    def test_alter_column_type_with_parameters(self, sql_gen: SQLGenerator) -> None:
+        """Test ALTER COLUMN TYPE with parameterized type."""
+        sql = sql_gen.alter_column_type("main.default.test", "my_col", "DECIMAL(18,2)")
+        assert sql == "ALTER TABLE main.default.test ALTER COLUMN `my_col` TYPE DECIMAL(18,2)"
+
     def test_update_table_description(self, sql_gen: SQLGenerator) -> None:
         """Test updating table description."""
         sql = sql_gen.update_table_description("main.default.test", "New description")

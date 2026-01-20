@@ -99,6 +99,13 @@ def plan_changes(
             help="Exclude permission (grant/revoke) changes from the plan.",
         ),
     ] = False,
+    ignore_column_types: Annotated[
+        bool,
+        typer.Option(
+            "--ignore-column-types",
+            help="Exclude column type changes from the plan.",
+        ),
+    ] = False,
     catalog_override: CatalogOverrideArg = None,
     schema_override: SchemaOverrideArg = None,
     table_prefix: TablePrefixArg = None,
@@ -243,6 +250,7 @@ def plan_changes(
         remove_tags=not ignore_tags,
         remove_constraints=not ignore_constraints,
         remove_permissions=not ignore_permissions,
+        alter_column_types=not ignore_column_types,
     )
 
     # Execute the plan action
