@@ -7,11 +7,11 @@ and for diffing against the desired contract state.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class ActionType(str, Enum):
+class ActionType(StrEnum):
     """Types of sync actions that can be performed."""
 
     CREATE_TABLE = "create_table"

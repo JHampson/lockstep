@@ -6,7 +6,12 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from lockstep.databricks.config import AuthType, DatabricksConfig, _load_config_file
+from lockstep.databricks.config import (
+    AuthType,
+    DatabricksConfig,
+    _load_config_file,
+    is_databricks_runtime,
+)
 
 
 class TestDatabricksConfig:
@@ -247,3 +252,62 @@ class TestLoadConfigFile:
             assert config.auth_type == AuthType.PAT
             assert config.token == "toml-token"
             assert config.get_auth_description() == "Personal Access Token"
+
+
+class TestRuntimeAuth:
+    """Tests for Databricks runtime auto-detection."""
+
+    def test_is_databricks_runtime_false_by_default(self) -> None:
+        """Test that is_databricks_runtime returns False outside Databricks."""
+        with patch.dict(os.environ, {}, clear=True):
+            assert is_databricks_runtime() is False
+
+    def test_is_databricks_runtime_true_when_env_set(self) -> None:
+        """Test that is_databricks_runtime returns True when env var is set."""
+        with patch.dict(os.environ, {"DATABRICKS_RUNTIME_VERSION": "15.4"}):
+            assert is_databricks_runtime() is True
+
+    def test_auto_detect_runtime_switches_oauth_to_runtime(self) -> None:
+        """Test that OAuth auth auto-switches to runtime inside Databricks."""
+        with patch.dict(
+            os.environ,
+            {
+                "DATABRICKS_RUNTIME_VERSION": "15.4",
+                "DATABRICKS_HOST": "https://test.databricks.com",
+                "DATABRICKS_HTTP_PATH": "/sql/test",
+            },
+        ):
+            config = DatabricksConfig()
+            assert config.auth_type == AuthType.RUNTIME
+
+    def test_explicit_auth_type_not_overridden_by_runtime(self) -> None:
+        """Test that explicit auth_type is not overridden by runtime detection."""
+        with patch.dict(
+            os.environ,
+            {
+                "DATABRICKS_RUNTIME_VERSION": "15.4",
+                "DATABRICKS_HOST": "https://test.databricks.com",
+                "DATABRICKS_HTTP_PATH": "/sql/test",
+                "DATABRICKS_TOKEN": "my-token",
+            },
+        ):
+            config = DatabricksConfig(auth_type=AuthType.PAT, token="my-token")
+            assert config.auth_type == AuthType.PAT
+
+    def test_get_auth_description_runtime(self) -> None:
+        """Test get_auth_description returns Databricks Runtime."""
+        config = DatabricksConfig(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type=AuthType.RUNTIME,
+        )
+        assert config.get_auth_description() == "Databricks Runtime"
+
+    def test_is_configured_true_runtime(self) -> None:
+        """Test is_configured returns True for runtime auth with host and http_path."""
+        config = DatabricksConfig(
+            host="https://test.databricks.com",
+            http_path="/sql/test",
+            auth_type=AuthType.RUNTIME,
+        )
+        assert config.is_configured() is True

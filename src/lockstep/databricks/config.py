@@ -12,7 +12,7 @@ from __future__ import annotations
 import configparser
 import contextlib
 import os
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -21,13 +21,23 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class AuthType(str, Enum):
+class AuthType(StrEnum):
     """Authentication type for Databricks connection."""
 
     OAUTH = "oauth"  # Interactive OAuth / Databricks CLI / Azure CLI
     PAT = "pat"  # Personal Access Token
     SP = "sp"  # Service Principal (OAuth M2M)
     PROFILE = "profile"  # Use Databricks CLI profile
+    RUNTIME = "runtime"  # Databricks runtime (Jobs / Notebooks)
+
+
+def is_databricks_runtime() -> bool:
+    """Detect if running inside a Databricks runtime (Job or Notebook).
+
+    Returns:
+        True if DATABRICKS_RUNTIME_VERSION is set in the environment.
+    """
+    return bool(os.getenv("DATABRICKS_RUNTIME_VERSION"))
 
 
 def _load_databricks_profile(profile_name: str | None = None) -> dict[str, Any]:
@@ -236,6 +246,11 @@ class DatabricksConfig(BaseSettings):
             with contextlib.suppress(ValueError):
                 self.auth_type = AuthType(env_auth_type.lower())
 
+        # Auto-detect Databricks runtime: if running inside a Job/Notebook
+        # and auth_type is still the default (oauth), switch to runtime auth
+        if self.auth_type == AuthType.OAUTH and is_databricks_runtime():
+            self.auth_type = AuthType.RUNTIME
+
         return self
 
     @staticmethod
@@ -273,6 +288,8 @@ class DatabricksConfig(BaseSettings):
         """Return a human-readable description of the authentication being used."""
         if self.profile:
             return f"Databricks CLI profile '{self.profile}'"
+        if self.auth_type == AuthType.RUNTIME:
+            return "Databricks Runtime"
         if self.auth_type == AuthType.SP:
             return "Service Principal"
         if self.auth_type == AuthType.PAT:

@@ -24,7 +24,9 @@ class InvalidAuthTypeError(ConfigurationError):
 
     def __init__(self, auth_type: str) -> None:
         self.auth_type = auth_type
-        super().__init__(f"Invalid auth-type '{auth_type}'. Must be one of: oauth, pat, sp")
+        super().__init__(
+            f"Invalid auth-type '{auth_type}'. Must be one of: oauth, pat, sp, runtime"
+        )
 
 
 class MissingConfigurationError(ConfigurationError):

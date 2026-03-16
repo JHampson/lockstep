@@ -43,7 +43,7 @@ http_path_option = typer.Option(
 auth_type_option = typer.Option(
     "--auth-type",
     envvar="DATABRICKS_AUTH_TYPE",
-    help="Authentication type: oauth (default), pat (Personal Access Token), or sp (Service Principal).",
+    help="Authentication type: oauth (default), pat, sp, or runtime (auto-detected in Databricks Jobs).",
 )
 
 token_option = typer.Option(
