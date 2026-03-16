@@ -12,7 +12,7 @@ from __future__ import annotations
 import configparser
 import contextlib
 import os
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +21,7 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class AuthType(str, Enum):
+class AuthType(StrEnum):
     """Authentication type for Databricks connection."""
 
     OAUTH = "oauth"  # Interactive OAuth / Databricks CLI / Azure CLI

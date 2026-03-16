@@ -6,13 +6,13 @@ Reference: https://bitol-io.github.io/open-data-contract-standard/
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-class ContractStatus(str, Enum):
+class ContractStatus(StrEnum):
     """Status of the data contract."""
 
     DRAFT = "draft"
@@ -21,7 +21,7 @@ class ContractStatus(str, Enum):
     RETIRED = "retired"
 
 
-class DataType(str, Enum):
+class DataType(StrEnum):
     """Logical data types supported in ODCS contracts.
 
     These map to Databricks Unity Catalog physical types.
@@ -200,7 +200,7 @@ class TableInfo(BaseModel):
         return f"{self.catalog}.{self.schema_name}.{self.table}"
 
 
-class Permission(str, Enum):
+class Permission(StrEnum):
     """Unity Catalog table permissions."""
 
     SELECT = "SELECT"
