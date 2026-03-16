@@ -92,40 +92,51 @@ class DatabricksConnector:
     def _authenticate_runtime(self, kwargs: dict[str, Any]) -> None:
         """Authenticate using Databricks runtime native credentials.
 
-        When running inside a Databricks Job or Notebook, the SDK can resolve
-        credentials automatically via environment variables set by the runtime
-        (DATABRICKS_HOST and DATABRICKS_TOKEN).
+        Tries in order:
+        1. DATABRICKS_TOKEN environment variable (if set explicitly in job config)
+        2. dbutils context API (available in Jobs and Notebooks on the cluster)
         """
         import os
 
+        # 1. Check for explicit env var (user-configured in job environment)
         token = os.getenv("DATABRICKS_TOKEN")
         if token:
             kwargs["access_token"] = token
             logger.debug("Using Databricks runtime authentication (env token)")
             return
 
-        # Fallback: use the SDK Config with no host to let it auto-detect runtime
-        try:
-            from databricks.sdk.core import Config
+        # 2. Extract token from dbutils notebook context (works in Jobs & Notebooks)
+        token = self._get_token_from_dbutils()
+        if token:
+            kwargs["access_token"] = token
+            logger.debug("Using Databricks runtime authentication (dbutils context)")
+            return
 
-            sdk_config = Config()
-            auth_headers = sdk_config.authenticate()
-            auth_header = auth_headers.get("Authorization", "")
-            if auth_header.startswith("Bearer "):
-                kwargs["access_token"] = auth_header[7:]
-                logger.debug("Using Databricks runtime authentication (SDK auto-detect)")
-            else:
-                raise DatabricksConnectionError(
-                    "Databricks runtime authentication returned unexpected format. "
-                    f"Got: {list(auth_headers.keys())}"
-                )
-        except DatabricksConnectionError:
-            raise
+        raise DatabricksConnectionError(
+            "Databricks runtime authentication failed: could not obtain a token. "
+            "Set DATABRICKS_TOKEN in your job environment variables, or use "
+            "--auth-type pat/sp with explicit credentials."
+        )
+
+    @staticmethod
+    def _get_token_from_dbutils() -> str | None:
+        """Extract API token from the Databricks dbutils notebook context.
+
+        Returns:
+            Bearer token string, or None if not available.
+        """
+        try:
+            from pyspark.sql import SparkSession
+
+            spark = SparkSession.getActiveSession()
+            if spark is None:
+                return None
+            dbutils = spark._jvm.com.databricks.dbutils_v1.DBUtilsHolder.dbutils()  # type: ignore[union-attr]
+            token = dbutils.notebook().getContext().apiToken().getOrElse(None)
+            return token  # type: ignore[return-value]
         except Exception as e:
-            raise DatabricksConnectionError(
-                f"Databricks runtime authentication failed: {e}. "
-                "Ensure DATABRICKS_TOKEN is set or the runtime provides credentials."
-            ) from e
+            logger.debug(f"Could not get token from dbutils: {e}")
+            return None
 
     def _authenticate_service_principal(self, kwargs: dict[str, Any]) -> None:
         """Authenticate using Service Principal (OAuth M2M)."""
