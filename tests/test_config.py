@@ -6,7 +6,12 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from lockstep.databricks.config import AuthType, DatabricksConfig, _load_config_file, is_databricks_runtime
+from lockstep.databricks.config import (
+    AuthType,
+    DatabricksConfig,
+    _load_config_file,
+    is_databricks_runtime,
+)
 
 
 class TestDatabricksConfig:

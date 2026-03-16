@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from databricks import sql as databricks_sql
 
-from lockstep.databricks.config import AuthType, DatabricksConfig, is_databricks_runtime
+from lockstep.databricks.config import AuthType, DatabricksConfig
 
 if TYPE_CHECKING:
     from databricks.sql.client import Connection, Cursor
