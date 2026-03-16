@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from databricks import sql as databricks_sql
 
-from lockstep.databricks.config import AuthType, DatabricksConfig
+from lockstep.databricks.config import AuthType, DatabricksConfig, is_databricks_runtime
 
 if TYPE_CHECKING:
     from databricks.sql.client import Connection, Cursor
@@ -74,7 +74,10 @@ class DatabricksConnector:
 
         auth_type = self.config.auth_type
 
-        if auth_type == AuthType.SP:
+        if auth_type == AuthType.RUNTIME:
+            # Databricks runtime authentication (Job or Notebook)
+            self._authenticate_runtime(kwargs)
+        elif auth_type == AuthType.SP:
             # Service Principal / OAuth M2M authentication
             self._authenticate_service_principal(kwargs)
         elif auth_type == AuthType.PAT:
@@ -85,6 +88,44 @@ class DatabricksConnector:
             self._authenticate_oauth(kwargs)
 
         return kwargs
+
+    def _authenticate_runtime(self, kwargs: dict[str, Any]) -> None:
+        """Authenticate using Databricks runtime native credentials.
+
+        When running inside a Databricks Job or Notebook, the SDK can resolve
+        credentials automatically via environment variables set by the runtime
+        (DATABRICKS_HOST and DATABRICKS_TOKEN).
+        """
+        import os
+
+        token = os.getenv("DATABRICKS_TOKEN")
+        if token:
+            kwargs["access_token"] = token
+            logger.debug("Using Databricks runtime authentication (env token)")
+            return
+
+        # Fallback: use the SDK Config with no host to let it auto-detect runtime
+        try:
+            from databricks.sdk.core import Config
+
+            sdk_config = Config()
+            auth_headers = sdk_config.authenticate()
+            auth_header = auth_headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                kwargs["access_token"] = auth_header[7:]
+                logger.debug("Using Databricks runtime authentication (SDK auto-detect)")
+            else:
+                raise DatabricksConnectionError(
+                    "Databricks runtime authentication returned unexpected format. "
+                    f"Got: {list(auth_headers.keys())}"
+                )
+        except DatabricksConnectionError:
+            raise
+        except Exception as e:
+            raise DatabricksConnectionError(
+                f"Databricks runtime authentication failed: {e}. "
+                "Ensure DATABRICKS_TOKEN is set or the runtime provides credentials."
+            ) from e
 
     def _authenticate_service_principal(self, kwargs: dict[str, Any]) -> None:
         """Authenticate using Service Principal (OAuth M2M)."""
