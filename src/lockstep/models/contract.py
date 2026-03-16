@@ -190,8 +190,8 @@ class TableInfo(BaseModel):
 
     model_config = ConfigDict(extra="allow", populate_by_name=True)
 
-    catalog: str = Field(..., description="Unity Catalog name")
-    schema_name: str = Field(..., alias="schema", description="Schema/database name")
+    catalog: str = Field(default="", description="Unity Catalog name")
+    schema_name: str = Field(default="", alias="schema", description="Schema/database name")
     table: str = Field(..., description="Table name")
 
     @property
@@ -510,29 +510,33 @@ class Contract(BaseModel):
         if data.get("dataset"):
             return data
 
-        # Extract from ODCS v3 servers + schema
+        # Extract table name from schema array
         servers = data.get("servers", [])
         schema = data.get("schema", [])
 
+        table_name = ""
+        if schema and isinstance(schema, list) and len(schema) > 0:
+            first_schema = schema[0]
+            if isinstance(first_schema, dict):
+                table_name = first_schema.get("name", "")
+
+        # Extract catalog/schema from servers if available
+        catalog = ""
+        schema_name = ""
         if servers and isinstance(servers, list) and len(servers) > 0:
             server = servers[0]
             if isinstance(server, dict):
                 catalog = server.get("catalog", "")
                 schema_name = server.get("schema", "")
 
-                # Get table name from schema array
-                table_name = ""
-                if schema and isinstance(schema, list) and len(schema) > 0:
-                    first_schema = schema[0]
-                    if isinstance(first_schema, dict):
-                        table_name = first_schema.get("name", "")
-
-                if catalog and schema_name and table_name:
-                    data["dataset"] = {
-                        "catalog": catalog,
-                        "schema": schema_name,
-                        "table": table_name,
-                    }
+        # Build dataset if we have at least a table name
+        # (catalog/schema can be filled later via overrides or defaults)
+        if table_name:
+            data["dataset"] = {
+                "catalog": catalog,
+                "schema": schema_name,
+                "table": table_name,
+            }
 
         return data
 
@@ -581,6 +585,18 @@ class Contract(BaseModel):
         catalog = catalog_override or info.catalog
         schema = schema_override or info.schema_name
         table = info.table
+
+        if not catalog:
+            raise ValueError(
+                f"Contract '{self.name}' has no catalog defined. "
+                "Set it in the contract (dataset or servers) or use --catalog-override."
+            )
+        if not schema:
+            raise ValueError(
+                f"Contract '{self.name}' has no schema defined. "
+                "Set it in the contract (dataset or servers) or use --schema-override."
+            )
+
         if table_prefix:
             table = f"{table_prefix}{table}"
         return f"{catalog}.{schema}.{table}"
